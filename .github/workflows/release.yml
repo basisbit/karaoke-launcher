@@ -56,7 +56,7 @@ jobs:
           mkdir -p dist
           go build -trimpath -ldflags "-s -w -X main.version=$TAG ${{ matrix.ldflags }}" \
             -o "dist/karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" ./cmd/karaoke-launcher
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}
           path: dist/*
@@ -65,7 +65,7 @@ jobs:
     needs: [release-please, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
