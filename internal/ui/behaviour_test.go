@@ -153,3 +153,53 @@ func TestPlayMissingGame(t *testing.T) {
 		}
 	})
 }
+
+// TestPlayCloses: after the game started, the launcher closes at once when nothing is downloading; while a download
+// runs, it goes on during the game and the launcher closes when it is finished.
+func TestPlayCloses(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a"}, "Rock": {"b"}})
+	var stall atomic.Bool
+	release := make(chan struct{})
+	files := http.FileServer(http.Dir(pub))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if stall.Load() && strings.HasPrefix(r.URL.Path, "/blobs/") {
+			select { // the song's files come when the test says so
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		files.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "dark", "launcher.json"), "en",
+		[]library.Feed{{ID: "main", Address: srv.URL + "/"}})
+	game := []string{os.Args[0], "-test.run=^$"} // this test program, which ends at once: a game that starts
+	a.o.Config.Start = map[string][]string{"windows": game, "linux": game, "macos": game}
+	var quits atomic.Int32
+	a.o.Quit = func() { quits.Add(1) }
+	a.o.Library.Start(map[string]library.Choice{"main": {Packs: []string{"pop"}}})
+	eventually(t, a, "songs there", func() bool { return a.o.Library.HasSongs() && !a.o.Library.Status().Running })
+	onUI(a, a.showHome)
+
+	onUI(a, a.home.onPlay)
+	if quits.Load() != 1 {
+		t.Fatalf("nothing downloads, but the launcher did not close (%d)", quits.Load())
+	}
+
+	// a download runs: it is not paused, and the launcher waits for it
+	onUI(a, func() { a.played, a.quitting = false, false })
+	stall.Store(true)
+	a.o.Library.Start(map[string]library.Choice{"main": {Packs: []string{"pop", "rock"}}})
+	eventually(t, a, "downloading", func() bool { return a.o.Library.Status().Progress.Phase == "downloading" })
+	onUI(a, a.home.onPlay)
+	eventually(t, a, "game ended", func() bool { return !a.gameRunning })
+	if st := a.o.Library.Status(); !st.Running || st.Paused || quits.Load() != 1 {
+		t.Fatalf("during the download: running %v, paused %v, closed %d times", st.Running, st.Paused, quits.Load())
+	}
+	close(release)
+	eventually(t, a, "closed after the download", func() bool { return quits.Load() == 2 })
+	if st := a.o.Library.Status(); st.Running {
+		t.Fatal("closed while still downloading")
+	}
+}

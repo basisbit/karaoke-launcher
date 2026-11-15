@@ -98,7 +98,7 @@ tells the player nothing. Players are never asked to decide about an update they
   it asks the player to close every game window that is still open, also ones started without the launcher. On Linux
   and Windows it then checks that no program runs from the game's folder and asks again while one does; on macOS the
   player's answer counts. If the player chooses "Later", the download is kept and the question comes again at the
-  next start.
+  next start. If the player already pressed Play, the update is only downloaded and installed at the next start.
 - **The launcher itself** is downloaded in the background. Then the start screen says "An update is ready." with a
   "Restart now" button. If the player ignores it, the update is installed at the next start.
 - **When the launcher can't update itself** (no file for this system, for example macOS, or a folder the player

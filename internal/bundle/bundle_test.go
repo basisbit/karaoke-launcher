@@ -255,6 +255,10 @@ func TestExample(t *testing.T) {
 	if _, err := Load(filepath.Join(dir, "bundle.json")); err != nil {
 		t.Fatal(err)
 	}
+	// the example with a game definition (its archives are on the web)
+	if b, err := Load(filepath.Join("..", "..", "examples", "usdx", "bundle.json")); err != nil || b.Game == nil {
+		t.Fatal(err)
+	}
 }
 
 func TestLauncherBinary(t *testing.T) {

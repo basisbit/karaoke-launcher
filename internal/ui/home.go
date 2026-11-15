@@ -171,8 +171,9 @@ func (h *home) refresh(s library.Status) {
 	}
 }
 
-// onPlay starts the game, or leads to the songs when there are none yet. A running download pauses while the
-// game runs and continues when it ends.
+// onPlay starts the game, or leads to the songs when there are none yet. Once the game runs, the launcher closes.
+// A running download or program update goes on while the game runs; then the launcher closes when it is finished
+// (closeWhenDone). New songs show up at the game's next start.
 func (h *home) onPlay() {
 	a := h.a
 	if !a.o.Library.HasSongs() {
@@ -184,35 +185,21 @@ func (h *home) onPlay() {
 		a.showError("error.generic", err)
 		return
 	}
-	a.resume = a.o.Library.Status().Running
-	if a.resume {
-		a.o.Library.Pause()
-	}
 	p, err := start.Start(args, a.o.AppDir)
 	if err != nil {
 		a.showError("error.start", err)
-		a.resumeDownload()
 		return
 	}
-	a.gameRunning = true
+	a.gameRunning, a.played = true, true
 	h.refresh(a.o.Library.Status())
 	go func() {
 		<-p.Done()
 		a.do(func() {
 			a.gameRunning = false
-			a.resumeDownload()
 			a.statusChanged(a.o.Library.Status())
 		})
 	}()
-}
-
-func (a *App) resumeDownload() {
-	if a.resume {
-		a.resume = false
-		if err := a.o.Library.Start(nil); err != nil && err != library.ErrBusy {
-			a.showError("error.generic", err)
-		}
-	}
+	a.closeWhenDone()
 }
 
 // columnLayout gives its objects the full height and at most max width, centred: a column that doesn't stretch

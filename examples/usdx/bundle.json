@@ -1,0 +1,27 @@
+{
+  "bundle": 1,
+  "version": "1.0.0",
+  "game": "ultrastar-deluxe",
+  "icon": "icon.png",
+  "summary": "Sing along with friends",
+  "description": "An example bundle with UltraStar Deluxe. The game comes from the game definition ultrastar-deluxe of karaoke-bundle; this file only adds what is the community's own.",
+  "license": "MIT",
+  "homepage": "https://example.org/",
+  "developer": "Example Community",
+  "site": "http://127.0.0.1:8090/",
+  "launcher": {
+    "version": "v0.1.0",
+    "repo": "basisbit/karaoke-launcher"
+  },
+  "files": [
+    "assets"
+  ],
+  "flatpak": {
+    "runtime": "org.freedesktop.Platform",
+    "runtime_version": "26.08",
+    "sdk": "org.freedesktop.Sdk",
+    "finish_args": [
+      "--share=network"
+    ]
+  }
+}

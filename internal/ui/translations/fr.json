@@ -18,7 +18,7 @@
   "status.source": "Source de chansons {index} sur {count}",
   "status.offline": "Pas de connexion. Nouvel essai plus tard.",
   "status.paused": "Téléchargement en pause",
-  "status.gamerunning": "Le jeu est lancé. Le téléchargement reprend quand il se termine.",
+  "status.gamerunning": "Le jeu est lancé. Le lanceur se ferme quand le téléchargement est terminé.",
   "status.problem": "Certaines chansons n’ont pas pu être téléchargées. Elles seront réessayées plus tard.",
   "status.finishing": "Finalisation …",
   "songs.title": "Choisis tes chansons",

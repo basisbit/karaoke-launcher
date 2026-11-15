@@ -260,3 +260,34 @@ func TestLibraryFeedsTrusted(t *testing.T) {
 		t.Fatalf("an added feed with a key is never trusted: %+v", got)
 	}
 }
+
+// TestUpdateGameAfterPlay: a game update that arrives after the game was started is only downloaded; it is installed
+// at the next start, without a question, and the launcher closes when the download is done.
+func TestUpdateGameAfterPlay(t *testing.T) {
+	release := make(chan struct{})
+	u := updateSite(t, map[string]string{"game": "2.0"}, map[string]map[string]string{"game": {"game.bin": "game 2.0"}}, "test-x", release)
+	game := filepath.Join(t.TempDir(), "game")
+	u.Targets = []update.Target{{ID: "game", Dir: game}}
+	a := updateApp(t, "en", u)
+	var quits atomic.Int32
+	a.o.Quit = func() { quits.Add(1) }
+	onUI(a, func() { a.played, a.checking = true, true }) // as after Play while the check runs
+	go a.runUpdates()
+	eventually(t, a, "downloading the game", func() bool { return a.home.updRow.Visible() })
+	if quits.Load() != 0 {
+		t.Fatal("closed during the update's download")
+	}
+	close(release)
+	eventually(t, a, "closed after the download", func() bool { return quits.Load() == 1 })
+	onUI(a, func() {
+		if a.closeAsk != nil {
+			t.Error("asked to close the game")
+		}
+	})
+	if _, err := os.Stat(filepath.Join(game, "game.bin")); err == nil {
+		t.Fatal("installed while the game may run")
+	}
+	if !update.Pending(game, "game") {
+		t.Fatal("the update is not staged for the next start")
+	}
+}

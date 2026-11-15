@@ -43,6 +43,10 @@ func (a *App) updateError(err error) {
 // runUpdates checks for program updates (background goroutine). Other components (the game) are installed at once
 // while Play is disabled, after the user closed the game; the launcher's own update waits for the user to restart.
 func (a *App) runUpdates() {
+	defer a.doWait(func() {
+		a.checking = false
+		a.closeWhenDone()
+	})
 	u := a.o.Updater
 	ctx := context.Background()
 	skip := map[string]bool{}     // installed at the next start: the user chose "Later", or installing failed
@@ -97,7 +101,12 @@ func (a *App) installComponent(t update.Target, stage func() error) (skip bool) 
 	})
 	err := stage()
 	broken := false
-	if err == nil {
+	played := false
+	a.doWait(func() { played = a.played })
+	switch {
+	case err == nil && played:
+		skip = true // the game runs or was started: installed at the next start (runUpdates, as after "Later")
+	case err == nil:
 		a.waitForGame()
 		if skip = !a.gameClosed(t.Dir); !skip {
 			a.o.Library.Exclusive(func() { _, err = update.Apply(t.Dir, t.ID, t.Keep) })

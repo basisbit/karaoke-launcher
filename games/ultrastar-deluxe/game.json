@@ -1,0 +1,72 @@
+{
+  "game": 1,
+  "id": "ultrastar-deluxe",
+  "name": "UltraStar Deluxe",
+  "version": "2026.11.0",
+  "license": "GPL-2.0-or-later",
+  "homepage": "https://usdx.eu/",
+  "source": "https://github.com/UltraStar-Deluxe/USDX/tree/v2026.11.0",
+  "bundle": {
+    "components": {
+      "ultrastar-deluxe": {
+        "version": "2026.11.0",
+        "windows-amd64": {
+          "url": "https://github.com/UltraStar-Deluxe/USDX/releases/download/v2026.11.0/UltraStarDeluxe-windows-portable-2026.11.0.zip",
+          "sha256": "sha256:66684a4c9930c8c20b0971a50356ebb858397fbbb9a7db0126362e2d435f446f",
+          "strip": 0
+        }
+      }
+    },
+    "macos": {
+      "apps": [
+        {
+          "url": "https://github.com/UltraStar-Deluxe/USDX/releases/download/v2026.11.0/UltraStarDeluxe-mac-ARM-2026.11.0.dmg",
+          "sha256": "sha256:0cb2edf3789c5951bebde53d648149527822d1ca12e344947638f866dde57362",
+          "app": "UltraStar Deluxe.app"
+        }
+      ]
+    },
+    "flatpak": {
+      "sdk_extensions": ["org.freedesktop.Sdk.Extension.freepascal"],
+      "build_options": {
+        "append-path": "/usr/lib/sdk/freepascal/bin",
+        "env": ["FPCDIR=/usr/lib/sdk/freepascal/fpcsrc"]
+      },
+      "cleanup": ["/include", "/lib/cmake", "/lib/pkgconfig", "/lib/*.so", "/lib/*.la", "setup_vars_opencv4.sh"],
+      "finish_args": [
+        "--socket=wayland",
+        "--socket=fallback-x11",
+        "--share=ipc",
+        "--socket=pulseaudio",
+        "--device=all",
+        "--filesystem=~/.java/.userPrefs/PortMidi:ro",
+        "--persist=.ultrastardx"
+      ],
+      "modules": ["flatpak/ultrastardx.yml"]
+    }
+  },
+  "launcher": {
+    "start": {
+      "windows": ["game/ultrastardx.exe", "-SongPath", "{library}"],
+      "linux": ["/app/bin/ultrastardx", "-SongPath", "{library}"],
+      "macos": ["../Helpers/UltraStar Deluxe.app/Contents/MacOS/ultrastardx", "-SongPath", "{library}"]
+    },
+    "components": {
+      "ultrastar-deluxe": {
+        "dir": { "windows": "{appdir}/game" },
+        "keep": ["config.ini", "Ultrastar.db"]
+      }
+    },
+    "content": {
+      "theme": {
+        "label": { "en": "Themes", "de": "Themes" },
+        "dir": {
+          "windows": "{appdir}/game/themes",
+          "linux": "{home}/.ultrastardx/themes",
+          "macos": "{home}/Library/Application Support/UltraStar Deluxe/themes"
+        },
+        "extensions": [".ini", ".png", ".jpg", ".jpeg"]
+      }
+    }
+  }
+}

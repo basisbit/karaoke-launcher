@@ -19,8 +19,10 @@ UninstPage instfiles
 
 Section
   SetShellVarContext current
-  ; A folder that this installer did not make is never filled (and so never removed by the uninstaller).
+  ; A folder that this installer did not make is never filled (and so never removed by the uninstaller). A folder
+  ; that the uninstaller kept (a game's settings and scores, .karaoke-launcher-kept) is used again.
   IfFileExists "$INSTDIR\.component-launcher.json" install
+  IfFileExists "$INSTDIR\.karaoke-launcher-kept" install
   IfFileExists "$INSTDIR\*.*" 0 install
   MessageBox MB_OK|MB_ICONSTOP "The folder $INSTDIR already exists, but it was not made by this installer. Nothing was installed." /SD IDOK
   Abort
@@ -32,6 +34,7 @@ install:
 {{- end}}
 {{- end}}
   SetOutPath "$INSTDIR"
+  Delete "$INSTDIR\.karaoke-launcher-kept"
   File "karaoke-launcher.ico"
   WriteUninstaller "$INSTDIR\karaoke-launcher-uninstall.exe"
   CreateShortcut {{.Shortcut}} "$INSTDIR\karaoke-launcher.exe" "" "$INSTDIR\karaoke-launcher.ico" 0
@@ -53,8 +56,29 @@ Section "Uninstall"
   MessageBox MB_OK|MB_ICONSTOP "$INSTDIR was not made by the installer. Nothing was removed." /SD IDOK
   Abort
 ours:
+  ; Only what the installer and the launcher's updates put there is removed: the launcher lists those files in
+  ; .component-*.json. What a game wrote itself (settings, scores) and what the user added stay, and so does the
+  ; folder when it is not empty then.
+  ClearErrors
+  ExecWait '"$INSTDIR\karaoke-launcher.exe" --uninstall' $0
+  IfErrors notall
+  StrCmp $0 0 0 notall
+  Delete "$INSTDIR\karaoke-launcher.exe"
+  Delete "$INSTDIR\karaoke-launcher-uninstall.exe"
+  Delete "$INSTDIR\karaoke-launcher.ico"
   Delete {{.Shortcut}}
   DeleteRegKey HKCU "${UNINST_KEY}"
-  RMDir /r "$INSTDIR"
+  RMDir "$INSTDIR"
+  IfFileExists "$INSTDIR\*.*" 0 removed
+  ; files stay (a game's settings and scores): the installer uses the folder again
+  FileOpen $1 "$INSTDIR\.karaoke-launcher-kept" w
+  FileWrite $1 "This folder keeps files that a game wrote. Installing again uses them."
+  FileClose $1
+removed:
   MessageBox MB_OK|MB_ICONINFORMATION {{q .Removed}} /SD IDOK
+  Return
+notall:
+  ; a program still runs: nothing more is removed, so that uninstalling again finishes the job
+  MessageBox MB_OK|MB_ICONEXCLAMATION {{q .NotAll}} /SD IDOK
+  Abort
 SectionEnd

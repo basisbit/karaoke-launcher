@@ -18,7 +18,7 @@
   "status.source": "Fonte de músicas {index} de {count}",
   "status.offline": "Sem ligação. Nova tentativa mais tarde.",
   "status.paused": "Transferência em pausa",
-  "status.gamerunning": "O jogo está aberto. A transferência continua quando terminar.",
+  "status.gamerunning": "O jogo está aberto. O launcher fecha quando a transferência terminar.",
   "status.problem": "Algumas músicas não foram transferidas. Serão tentadas de novo mais tarde.",
   "status.finishing": "A concluir …",
   "songs.title": "Escolhe as tuas músicas",
