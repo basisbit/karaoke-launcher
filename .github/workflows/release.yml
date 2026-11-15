@@ -1,0 +1,78 @@
+# Keeps a release pull request open that collects the Conventional Commits on main (CHANGELOG.md, next version).
+# Merging it creates the tag and the GitHub release; then the launcher binaries are built and attached.
+# Fyne needs cgo, so every system is built on its own runner instead of cross-compiling.
+#
+# Token: pull requests opened with the default GITHUB_TOKEN don't start other workflows, so the release PR
+# would never get its required checks. Store a fine-grained token or GitHub App token with "contents" and
+# "pull requests" write access as the secret RELEASE_PLEASE_TOKEN (see CONTRIBUTING.md, "Releases").
+name: release
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.rp.outputs.release_created }}
+      tag: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.created == 'true'
+    strategy:
+      matrix:
+        include:
+          - { runner: ubuntu-latest, os: linux, arch: amd64, ext: "", ldflags: "" }
+          - { runner: windows-latest, os: windows, arch: amd64, ext: .exe, ldflags: "-H windowsgui" }
+          - { runner: macos-latest, os: darwin, arch: arm64, ext: "", ldflags: "" }
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+      - name: Fyne build packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+      - name: Build
+        shell: bash
+        env:
+          TAG: ${{ needs.release-please.outputs.tag }}
+          CGO_ENABLED: "1"
+        run: |
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -X main.version=$TAG ${{ matrix.ldflags }}" \
+            -o "dist/karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" ./cmd/karaoke-launcher
+      - uses: actions/upload-artifact@v4
+        with:
+          name: karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*
+
+  attach:
+    needs: [release-please, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums and attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.release-please.outputs.tag }}
+        run: |
+          cd dist && sha256sum -- * > SHA256SUMS
+          gh release upload "$TAG" ./* --repo "$GITHUB_REPOSITORY" --clobber

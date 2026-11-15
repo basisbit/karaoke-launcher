@@ -1,0 +1,9 @@
+PROGRESS.md
+PLAN.md
+PLAN-*.md
+notes/
+bin/
+dist/
+*.key
+*.pem
+spike/

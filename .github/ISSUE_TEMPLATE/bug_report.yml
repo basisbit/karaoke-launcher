@@ -1,0 +1,41 @@
+name: Bug report
+description: The launcher doesn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Security problems please **not** here, but privately: see the security policy.
+  - type: input
+    id: version
+    attributes:
+      label: Launcher version
+      description: Shown under Settings → About, or the commit you built from
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: e.g. Windows 11, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, and what the launcher showed (the text of "Details" helps; remove private feed addresses).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Which community's launcher, the feed address (if public), screenshots.

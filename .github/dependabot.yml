@@ -1,0 +1,43 @@
+# Weekly update checks. Updates are bundled: one pull request for all patch updates (merges itself when the
+# checks are green, see workflows/dependabot-automerge.yml) and one for all minor and major updates (needs a
+# review). Security fixes are bundled the same way, but come as soon as an advisory is published.
+# Security updates must be switched on in the repository settings (.github/scripts/setup-repo.sh does it).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions-patch:
+        update-types: [patch]
+      actions-major-minor:
+        update-types: [minor, major]
+      actions-security-patch:
+        applies-to: security-updates
+        update-types: [patch]
+      actions-security-major-minor:
+        applies-to: security-updates
+        update-types: [minor, major]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      go-patch:
+        update-types: [patch]
+      go-major-minor:
+        update-types: [minor, major]
+      go-security-patch:
+        applies-to: security-updates
+        update-types: [patch]
+      go-security-major-minor:
+        applies-to: security-updates
+        update-types: [minor, major]

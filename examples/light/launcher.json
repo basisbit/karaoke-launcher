@@ -1,0 +1,22 @@
+{
+  "config": 1,
+  "id": "example-sing-along",
+  "name": "Karaoke",
+  "look": {
+    "logo": "assets/logo.svg",
+    "dark": false,
+    "colors": { "primary": "#ea580c", "background": "#fff7ed", "text": "#431407" }
+  },
+  "links": [
+    { "label": { "en": "Website" }, "url": "https://example.org/" }
+  ],
+  "feeds": [
+    { "id": "main", "address": "https://example.org/feed/", "starter": ["starter"] }
+  ],
+  "allow_other_feeds": false,
+  "start": {
+    "windows": ["{appdir}/game/game.exe", "--songs", "{library}"],
+    "linux": ["{appdir}/game/game", "--songs", "{library}"],
+    "macos": ["open", "-a", "Game", "--args", "--songs", "{library}"]
+  }
+}

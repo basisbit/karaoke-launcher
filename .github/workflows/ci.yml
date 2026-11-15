@@ -1,0 +1,77 @@
+# Checks every pull request and every push to main. The job names are the required checks in the main branch rules
+# (.github/scripts/setup-repo.sh), so keep them in sync when renaming.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+      - name: Fyne build packages (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+      - run: go build ./...
+      - run: go test -count=1 ./...
+
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache-dependency-path: go.sum
+      - name: Fyne build packages
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "::error::not formatted with gofmt: $unformatted"; exit 1; fi
+      - name: go mod tidy
+        run: go mod tidy -diff
+      - name: licence texts up to date (go generate ./internal/ui after dependency changes)
+        run: |
+          go generate ./internal/ui
+          git diff --exit-code internal/ui/licenses.txt
+      - name: go vet
+        run: go vet ./...
+      - name: staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...
+      - name: govulncheck (known vulnerabilities in Go and dependencies)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+      - name: race detector
+        run: go test -race -count=1 ./...
+      - name: shellcheck
+        run: shellcheck -S warning .github/scripts/*.sh
+      - name: actionlint (workflow files)
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@latest
+
+  commits:
+    name: commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Conventional Commits, no merge commits
+        run: .github/scripts/check-commits.sh "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}"
