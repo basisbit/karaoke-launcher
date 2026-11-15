@@ -47,8 +47,7 @@ func (a *App) showSettings() {
 	note.Wrapping = fyne.TextWrapWord
 	note.Hide()
 	change := widget.NewButton(tr.T("settings.library.change"), func() {
-		var d *dialog.FileDialog
-		d = dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
+		d := dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
 			a.fullDialog = nil
 			if err != nil || u == nil {
 				return
@@ -197,8 +196,7 @@ func (a *App) importBox() fyne.CanvasObject {
 		box.Add(container.NewBorder(nil, nil, nil, remove, label))
 	}
 	add := widget.NewButton(tr.T("settings.import.add"), func() {
-		var dlg *dialog.FileDialog
-		dlg = dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
+		dlg := dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
 			a.fullDialog = nil
 			if err != nil || u == nil || slices.Contains(set.Import, u.Path()) {
 				return
