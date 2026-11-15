@@ -12,6 +12,9 @@ them up to date and start their karaoke game, without admin rights and without a
 - **Communities:** ship the launcher with your own `launcher.json`, which sets your name, logo, colours, links, news,
   your song feeds and how to start your game. You don't need to change any code.
 
+The launcher can also keep itself and the community's game up to date from a file the community signs with its own
+key. See [docs/updates.md](docs/updates.md).
+
 The launcher works with any game that reads songs from a folder. It contains no code for one particular game.
 Songs come from feeds in the [karaoke-feeds](https://github.com/basisbit/karaoke-feeds) format. Each song has a
 checksum, and a feed can be signed.

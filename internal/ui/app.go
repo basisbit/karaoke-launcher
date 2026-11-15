@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -15,8 +16,10 @@ import (
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
 
 	"github.com/basisbit/karaoke-launcher/internal/config"
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 	"github.com/basisbit/karaoke-launcher/internal/library"
 	"github.com/basisbit/karaoke-launcher/internal/settings"
+	"github.com/basisbit/karaoke-launcher/internal/update"
 )
 
 // Options is everything the window needs.
@@ -24,10 +27,14 @@ type Options struct {
 	Config   *config.Config
 	Settings *settings.Settings
 	Library  *library.Library
-	AppDir   string // folder of the launcher executable
-	UserData string // per-user data folder
-	Version  string // launcher version
-	GOOS     string // runtime.GOOS; tests may set another system
+	AppDir   string          // folder of the launcher executable
+	UserData string          // per-user data folder
+	Version  string          // launcher version
+	GOOS     string          // runtime.GOOS; tests may set another system
+	Updater  *update.Updater // program updates; nil: none
+	Relaunch func() error    // starts the new launcher after its update (nil: update.Relaunch; tests replace it)
+	// Running lists the programs that run from a folder (nil: update.Running; tests replace it).
+	Running func(dir string) (names []string, ok bool)
 	// Do runs a function on the UI goroutine (nil: fyne.Do). Tests pass a serial runner, because Fyne's test
 	// driver runs fyne.Do on the calling goroutine.
 	Do func(func())
@@ -55,6 +62,11 @@ type App struct {
 
 	gameRunning bool // only touched on the Fyne goroutine
 	resume      bool // a download was paused for the game
+
+	updating    bool       // a program update is installed: Play is disabled
+	updLine     updateLine // the update row on the home screen
+	updErrShown bool
+	closeAsk    *dialog.ConfirmDialog // the question to close the game before its update, while it is shown
 }
 
 // New builds the window. The library's status changes are shown from now on.
@@ -91,6 +103,10 @@ func (a *App) Run() {
 // Nothing is downloaded for packs the user did not choose.
 func (a *App) Start() {
 	a.win.SetCloseIntercept(a.onClose)
+	a.setReadmes()
+	if a.o.Updater != nil {
+		go a.runUpdates()
+	}
 	go func() {
 		for _, f := range a.o.Library.Feeds() {
 			a.inspect(f.ID) // remembered for the songs screen; errors show there
@@ -119,7 +135,8 @@ func (a *App) Start() {
 }
 
 func (a *App) vars() config.Vars {
-	return config.Vars{Library: a.o.Settings.Library, AppDir: a.o.AppDir, UserData: a.o.UserData}
+	home, _ := os.UserHomeDir()
+	return config.Vars{Library: a.o.Settings.Library, AppDir: a.o.AppDir, UserData: a.o.UserData, Home: home}
 }
 
 func (a *App) showHome() {
@@ -191,7 +208,7 @@ func statusDetails(s library.Status) string {
 }
 
 // showError shows one sentence in plain words and a "Details" button with the technical message.
-func (a *App) showError(sentenceKey string, err error) {
+func (a *App) showError(sentenceKey string, err error) *dialog.CustomDialog {
 	details := widget.NewLabel(err.Error())
 	details.Wrapping = fyne.TextWrapWord
 	details.Hide()
@@ -202,6 +219,17 @@ func (a *App) showError(sentenceKey string, err error) {
 	d := dialog.NewCustom(a.o.Config.Name.Get(a.tr.Code()), a.tr.T("button.close"), container.NewVBox(msg, more, details), a.win)
 	d.Resize(fyne.NewSize(460, 200))
 	d.Show()
+	return d
+}
+
+// setReadmes gives the library the texts of the README.md files in the folders it fills, in the user's language.
+func (a *App) setReadmes() {
+	name := a.o.Config.Name.Get(a.tr.Code())
+	texts := map[string]string{folders.Songs: a.tr.T("readme.songs", "name", name)}
+	for kind, ct := range a.o.Config.Content {
+		texts[folders.Content(kind)] = a.tr.T("readme.content", "name", name, "label", ct.Label.Get(a.tr.Code()))
+	}
+	a.o.Library.SetReadmes(texts)
 }
 
 // ShowFatal shows an error window for problems before the launcher can work (bad config, second instance) and

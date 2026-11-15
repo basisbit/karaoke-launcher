@@ -128,6 +128,50 @@ func TestInvalid(t *testing.T) {
 		{"start shell string empty program", map[string]any{"start": map[string]any{"windows": []any{""}}}, "first argument"},
 		{"library uses {library}", map[string]any{"library": map[string]any{"default": "{library}/x"}}, "library.default"},
 		{"10 MB file", map[string]any{"padding": big}, "larger than"},
+		{"app_id two parts", map[string]any{"app_id": "example.Karaoke"}, `"app_id"`},
+		{"app_id space", map[string]any{"app_id": "org.example.My Karaoke"}, `"app_id"`},
+		{"app_id empty part", map[string]any{"app_id": "org..example.Karaoke"}, `"app_id"`},
+		{"app_id slash", map[string]any{"app_id": "org.example/../x.y"}, `"app_id"`},
+		{"app_id too long", map[string]any{"app_id": "org.example." + strings.Repeat("a", 244)}, `"app_id"`},
+		{"updates http", updates("http://example.org/app.json", goodKey, ""), "updates.url"},
+		{"updates url missing", updates("", goodKey, ""), "updates.url"},
+		{"updates page file", updates("https://example.org/app.json", goodKey, "file:///etc"), "updates.page"},
+		{"updates key short", updates("https://example.org/app.json", "ed25519:abc", ""), "updates.key"},
+		{"updates key missing", updates("https://example.org/app.json", "", ""), "updates.key"},
+		{"updates key rsa", updates("https://example.org/app.json", "rsa:"+goodKey[8:], ""), "updates.key"},
+		{"component launcher", component("launcher", map[string]any{"windows": "{appdir}/x"}, nil), "is the launcher itself"},
+		{"component id bad", component("Game", map[string]any{"windows": "{appdir}/x"}, nil), "components:"},
+		{"component dir relative", component("game", map[string]any{"linux": "game"}, nil), "must start with"},
+		{"component dir absolute", component("game", map[string]any{"linux": "/usr/lib/game"}, nil), "must start with"},
+		{"component dir {library}", component("game", map[string]any{"linux": "{home}/{library}"}, nil), "unknown placeholder {library}"},
+		{"component dir ..", component("game", map[string]any{"windows": `{appdir}\..\x`}, nil), `must not contain ".."`},
+		{"keep ..", component("game", map[string]any{"windows": "{appdir}/game"}, []any{"../config.ini"}), "keep"},
+		{"keep absolute", component("game", map[string]any{"windows": "{appdir}/game"}, []any{"/etc/x"}), "keep"},
+		{"keep backslash", component("game", map[string]any{"windows": "{appdir}/game"}, []any{`data\x`}), "keep"},
+		{"keep bad pattern", component("game", map[string]any{"windows": "{appdir}/game"}, []any{"[x"}), "keep"},
+		{"keep empty", component("game", map[string]any{"windows": "{appdir}/game"}, []any{""}), "keep"},
+		{"content songs", content("songs", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".ini"}), `other than "songs"`},
+		{"content kind upper", content("Theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".ini"}), "content:"},
+		{"content kind long", content(strings.Repeat("a", 33), themeLabel, map[string]any{"linux": "{home}/t"}, []any{".ini"}), "content:"},
+		{"content no label", content("theme", nil, map[string]any{"linux": "{home}/t"}, []any{".ini"}), "label is missing"},
+		{"content empty label", content("theme", map[string]any{"de": " "}, map[string]any{"linux": "{home}/t"}, []any{".ini"}), `label for "de" is empty`},
+		{"content dir relative", content("theme", themeLabel, map[string]any{"linux": "themes"}, []any{".ini"}), "must start with"},
+		{"content dir absolute", content("theme", themeLabel, map[string]any{"windows": "C:/themes"}, []any{".ini"}), "must start with"},
+		{"content dir ..", content("theme", themeLabel, map[string]any{"linux": "{home}/../etc"}, []any{".ini"}), `must not contain ".."`},
+		{"content dir unknown placeholder", content("theme", themeLabel, map[string]any{"linux": "{home}/{x}"}, []any{".ini"}), "unknown placeholder {x}"},
+		{"content no extensions", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{}), "extensions is empty"},
+		{"content dir library", content("theme", themeLabel, map[string]any{"linux": "{library}/"}, []any{".ini"}), "must not be the song folder itself"},
+		{"content dir added feed", content("theme", themeLabel, map[string]any{"windows": `{library}\added-0a1b2c3d\t`}, []any{".ini"}), "folder of a feed"},
+		{"content two kinds one folder", map[string]any{"content": map[string]any{
+			"theme": map[string]any{"label": themeLabel, "dir": map[string]any{"linux": "{home}/x"}, "extensions": []any{".ini"}},
+			"skin":  map[string]any{"label": themeLabel, "dir": map[string]any{"linux": "{home}/x/"}, "extensions": []any{".ini"}},
+		}}, "every kind needs its own folder"},
+		{"content extension without dot", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{"ini"}), "extensions"},
+		{"content extension upper", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".PNG"}), "extensions"},
+		{"content extension long", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".abcdefghi"}), "extensions"},
+		{"content extension exe", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".ini", ".exe"}), "program or script"},
+		{"content extension sh", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".sh"}), "program or script"},
+		{"content extension desktop", content("theme", themeLabel, map[string]any{"linux": "{home}/t"}, []any{".desktop"}), "program or script"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -145,6 +189,102 @@ func TestInvalid(t *testing.T) {
 	}
 	if _, err := Load(filepath.Join(dir, "missing.json")); err == nil {
 		t.Fatal("missing file accepted")
+	}
+}
+
+const goodKey = "ed25519:ZFpXtOewICQ0aV3Z5HkkPT0PuA1yNQhIHMIDjAOvxc8"
+
+func updates(url, key, page string) map[string]any {
+	return map[string]any{"updates": map[string]any{"url": url, "key": key, "page": page}}
+}
+
+func component(id string, dir map[string]any, keep []any) map[string]any {
+	return map[string]any{"components": map[string]any{id: map[string]any{"dir": dir, "keep": keep}}}
+}
+
+var themeLabel = map[string]any{"en": "Themes", "de": "Designs"}
+
+func content(kind string, label map[string]any, dir map[string]any, exts []any) map[string]any {
+	c := map[string]any{"dir": dir, "extensions": exts}
+	if label != nil {
+		c["label"] = label
+	}
+	return map[string]any{"content": map[string]any{kind: c}}
+}
+
+func TestContent(t *testing.T) {
+	c, err := Load(write(t, content("theme", themeLabel, map[string]any{"windows": "{appdir}/game/themes", "linux": "{home}/.game/themes",
+		"macos": "{library}/../x", "amiga": "anything"}, []any{".ini", ".png", ".mp4"})))
+	if err == nil {
+		t.Fatalf("macos dir with .. accepted: %+v", c.Content)
+	}
+	c, err = Load(write(t, content("theme", themeLabel, map[string]any{"windows": "{appdir}/game/themes", "linux": "{home}/.game/themes",
+		"macos": "{library}/themes", "amiga": "anything"}, []any{".ini", ".png", ".mp4"})))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Content["theme"].Label.Get("de") != "Designs" || len(c.Content["theme"].Extensions) != 3 {
+		t.Fatalf("loaded: %+v", c.Content)
+	}
+	v := Vars{Library: "/lib", AppDir: "/app", UserData: "/u", Home: "/home/x"}
+	for _, tc := range []struct {
+		kind, goos, want string
+		ok               bool
+	}{
+		{"theme", "windows", "/app/game/themes", true},
+		{"theme", "linux", "/home/x/.game/themes", true},
+		{"theme", "darwin", "/lib/themes", true},
+		{"theme", "plan9", "", false},
+		{"other", "linux", "", false},
+	} {
+		dir, ok, err := c.ContentDir(tc.kind, tc.goos, v)
+		if want := filepath.FromSlash(tc.want); dir != want || ok != tc.ok || err != nil {
+			t.Errorf("ContentDir(%s, %s) = %q %v %v, want %q %v", tc.kind, tc.goos, dir, ok, err, want, tc.ok)
+		}
+	}
+	if tg := c.Targets("linux", v); len(tg) != 1 || tg["theme"].Dir != filepath.FromSlash("/home/x/.game/themes") || len(tg["theme"].Extensions) != 3 {
+		t.Errorf("Targets: %+v", tg)
+	}
+	if tg := c.Targets("plan9", v); len(tg) != 0 {
+		t.Errorf("Targets for a system without a folder: %+v", tg)
+	}
+}
+
+func TestComponents(t *testing.T) {
+	change := updates("https://example.org/karaoke/app.json", goodKey, "https://example.org/karaoke/")
+	change["app_id"] = "org.example.Karaoke_2-x"
+	change["components"] = map[string]any{
+		"game":  map[string]any{"dir": map[string]any{"windows": "{appdir}/game", "linux": "{home}/.game", "amiga": "x"}, "keep": []any{"config.ini", "*.db", "data/*.cfg"}},
+		"tools": map[string]any{"dir": map[string]any{"macos": "{userdata}/tools"}},
+	}
+	c, err := Load(write(t, change))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.AppID != "org.example.Karaoke_2-x" || c.Updates.Key != goodKey || c.Updates.Page == "" || len(c.Components["game"].Keep) != 3 {
+		t.Fatalf("loaded: %+v %+v", c, c.Updates)
+	}
+	v := Vars{Library: "/lib", AppDir: "/app", UserData: "/u", Home: "/home/x"}
+	for _, tc := range []struct {
+		id, goos, want string
+		ok             bool
+	}{
+		{"game", "windows", "/app/game", true},
+		{"game", "linux", "/home/x/.game", true},
+		{"game", "darwin", "", false},
+		{"tools", "darwin", "/u/tools", true},
+		{"launcher", "linux", "/app", true},
+		{"unknown", "linux", "", false},
+		{"game", "plan9", "", false},
+	} {
+		dir, ok, err := c.ComponentDir(tc.id, tc.goos, v)
+		if want := filepath.FromSlash(tc.want); dir != want || ok != tc.ok || err != nil {
+			t.Errorf("ComponentDir(%s, %s) = %q %v %v, want %q %v", tc.id, tc.goos, dir, ok, err, want, tc.ok)
+		}
+	}
+	// {home} is only for component folders
+	if _, err := Expand("{home}/x", v, startVars...); err == nil {
+		t.Error("{home} accepted in a start command")
 	}
 }
 

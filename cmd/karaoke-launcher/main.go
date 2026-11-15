@@ -15,6 +15,7 @@ import (
 	"github.com/basisbit/karaoke-launcher/internal/library"
 	"github.com/basisbit/karaoke-launcher/internal/settings"
 	"github.com/basisbit/karaoke-launcher/internal/ui"
+	"github.com/basisbit/karaoke-launcher/internal/update"
 )
 
 // version is set at release time with -ldflags "-X main.version=v1.2.3".
@@ -40,7 +41,8 @@ func main() {
 		fatal(nil, "app.error.config", err)
 		return
 	}
-	vars := config.Vars{AppDir: appdir, UserData: userdata}
+	home, _ := os.UserHomeDir()
+	vars := config.Vars{AppDir: appdir, UserData: userdata, Home: home}
 	defaultLib, err := cfg.LibraryDefault(vars)
 	if err != nil {
 		fatal(nil, "app.error.config", err)
@@ -53,7 +55,7 @@ func main() {
 	}
 	var feeds []library.Feed
 	for _, f := range cfg.Feeds {
-		feeds = append(feeds, library.Feed{ID: f.ID, Address: f.Address, Key: f.Key, Starter: f.Starter})
+		feeds = append(feeds, library.Feed{ID: f.ID, Address: f.Address, Key: f.Key, Starter: f.Starter, Trusted: f.Key != ""})
 	}
 	if cfg.AllowOtherFeeds {
 		for _, f := range set.Feeds {
@@ -70,10 +72,47 @@ func main() {
 	}
 	defer lib.Close()
 	lib.SetSeeds(set.Import)
+	vars.Library = set.Library
+	lib.SetTargets(cfg.Targets(runtime.GOOS, vars)) // theme folders and the like; only feeds with a key use them
 
-	fa := app.NewWithID("io.github.basisbit.karaoke-launcher." + cfg.ID)
+	// Program updates. Only the process that holds the library lock installs them.
+	targets := []update.Target{{ID: config.Launcher, Dir: appdir}}
+	for id, c := range cfg.Components {
+		if dir, ok, err := cfg.ComponentDir(id, runtime.GOOS, vars); ok && err == nil {
+			targets = append(targets, update.Target{ID: id, Dir: dir, Keep: c.Keep})
+		}
+	}
+	if applyStaged(targets) {
+		lib.Close()
+		if err := update.Relaunch(); err != nil {
+			fatal(set, "error.generic", err) // the new version is installed; starting it by hand works
+		}
+		return
+	}
+	var updater *update.Updater
+	if u := cfg.Updates; u != nil {
+		updater = &update.Updater{URL: u.URL, Key: u.Key, ID: cfg.ID, UserData: userdata, Targets: targets}
+	}
+
+	id := "io.github.basisbit.karaoke-launcher." + cfg.ID
+	if cfg.AppID != "" {
+		id = cfg.AppID
+	}
+	fa := app.NewWithID(id)
 	ui.New(fa, ui.Options{Config: cfg, Settings: set, Library: lib, AppDir: appdir, UserData: userdata,
-		Version: version, GOOS: runtime.GOOS}).Run()
+		Version: version, GOOS: runtime.GOOS, Updater: updater}).Run()
+}
+
+// applyStaged removes files that earlier updates moved aside and installs the launcher's own update if it was
+// downloaded but not installed yet (the user closed the launcher instead of restarting). It reports whether the
+// launcher was updated. Errors are ignored: the old version runs, and the next start tries again. Waiting updates of
+// other components (the game) are installed by the window, after the user closed the game (ui.runUpdates).
+func applyStaged(targets []update.Target) (launcher bool) {
+	for _, t := range targets {
+		update.Cleanup(t.Dir)
+	}
+	ok, err := update.Apply(targets[0].Dir, targets[0].ID, targets[0].Keep)
+	return ok && err == nil
 }
 
 // fatal shows one error window and returns when it is closed.

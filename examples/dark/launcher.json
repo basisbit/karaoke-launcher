@@ -20,5 +20,12 @@
   "library": { "default": "{userdata}/songs" },
   "start": {
     "linux": ["karaoke-game", "--songs", "{library}"]
+  },
+  "content": {
+    "theme": {
+      "label": { "en": "Themes", "de": "Designs" },
+      "dir": { "windows": "{appdir}/game/themes", "linux": "{home}/.karaoke-game/themes", "macos": "{home}/.karaoke-game/themes" },
+      "extensions": [".ini", ".png", ".jpg"]
+    }
   }
 }
