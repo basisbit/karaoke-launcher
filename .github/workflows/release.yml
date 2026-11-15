@@ -56,6 +56,19 @@ jobs:
           mkdir -p dist
           go build -trimpath -ldflags "-s -w -X main.version=$TAG ${{ matrix.ldflags }}" \
             -o "dist/karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" ./cmd/karaoke-launcher
+      - name: Build the bundle tool for every system (pure Go, cross-compiled)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          TAG: ${{ needs.release-please.outputs.tag }}
+          CGO_ENABLED: "0"
+        run: |
+          for target in linux/amd64 linux/arm64 windows/amd64 windows/arm64 darwin/amd64 darwin/arm64; do
+            os=${target%/*} arch=${target#*/} ext=""
+            if [ "$os" = windows ]; then ext=.exe; fi
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$TAG" \
+              -o "dist/karaoke-bundle-$os-$arch$ext" ./cmd/karaoke-bundle
+          done
       - uses: actions/upload-artifact@v7
         with:
           name: karaoke-launcher-${{ matrix.os }}-${{ matrix.arch }}

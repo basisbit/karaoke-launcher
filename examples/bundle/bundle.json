@@ -1,0 +1,33 @@
+{
+  "bundle": 1,
+  "version": "1.0.0",
+  "icon": "icon.png",
+  "summary": "Sing along with friends",
+  "description": "An example bundle with a dummy game. It shows how a community ships the launcher together with its game.",
+  "license": "MIT",
+  "homepage": "https://example.org/",
+  "developer": "Example Community",
+  "site": "http://127.0.0.1:8090/",
+  "launcher": {
+    "version": "v0.1.0",
+    "repo": "basisbit/karaoke-launcher"
+  },
+  "files": [
+    "assets"
+  ],
+  "components": {
+    "game": {
+      "version": "1.0.0",
+      "windows-amd64": {
+        "path": "game/game-windows-amd64.zip",
+        "sha256": "sha256:38ae256d89dddf528724a1de9382aa6d3bc1d62a5ae2cb122354acab7c2b33d4",
+        "strip": 0
+      },
+      "linux-amd64": {
+        "path": "game/game-linux-amd64.zip",
+        "sha256": "sha256:a53d35eaa5b1118c889af971381dd6cdec636779a710eefeabc220dde57d4d94",
+        "strip": 0
+      }
+    }
+  }
+}

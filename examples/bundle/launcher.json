@@ -1,0 +1,34 @@
+{
+  "config": 1,
+  "id": "example-bundle",
+  "name": {"en": "Karaoke Example", "de": "Karaoke-Beispiel"},
+  "app_id": "org.example.KaraokeExample",
+  "look": {
+    "logo": "assets/logo.svg",
+    "background": "assets/background.png",
+    "dark": true,
+    "colors": { "primary": "#3b82f6", "background": "#111827", "text": "#f9fafb" }
+  },
+  "links": [
+    { "label": { "en": "Website", "de": "Webseite" }, "url": "https://example.org/" }
+  ],
+  "feeds": [
+    { "id": "local", "address": "http://127.0.0.1:8080/", "starter": ["creative-commons"] }
+  ],
+  "library": { "default": "{userdata}/songs" },
+  "start": {
+    "windows": ["game/game.exe", "--songs", "{library}"],
+    "linux": ["game/game", "--songs", "{library}"]
+  },
+  "updates": {
+    "url": "http://127.0.0.1:8090/app.json",
+    "key": "ed25519:aT1kuqmwLsSYNNbLRLUiZKwysGkWiiTenUQFqvy1ZJI",
+    "page": "http://127.0.0.1:8090/"
+  },
+  "components": {
+    "game": {
+      "dir": { "windows": "{appdir}/game", "linux": "{appdir}/game" },
+      "keep": ["game-run.txt"]
+    }
+  }
+}
