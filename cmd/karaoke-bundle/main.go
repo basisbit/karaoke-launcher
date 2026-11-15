@@ -24,6 +24,9 @@ Usage:
   karaoke-bundle keygen  <file>                   make a key for signing app.json
   karaoke-bundle windows [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
                                                   make the Windows downloads in <out>/windows
+  karaoke-bundle flatpak [--build] [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
+                                                  write <out>/flatpak: the manifest and files for flatpak-builder;
+                                                  --build also builds the repository, the .flatpak and .flatpakref
   karaoke-bundle site    --key <file or -> [--bundle bundle.json] [--out dist]
                                                   make <out>/site, the folder for the web server:
                                                   app.json signed with the key (- reads it from stdin)
@@ -43,6 +46,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return check(args[1:], stdout, stderr)
 	case "windows":
 		return windows(args[1:], stdout, stderr)
+	case "flatpak":
+		return flatpak(args[1:], stdout, stderr)
 	case "site":
 		return site(args[1:], stdout, stderr)
 	case "keygen":
@@ -139,5 +144,35 @@ func site(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, n)
 	}
 	fmt.Fprintf(stdout, "%s: copy this folder to %s\n", filepath.Join(*c.out, "site"), b.Site)
+	return 0
+}
+
+func flatpak(args []string, stdout, stderr io.Writer) int {
+	c := newFlags("flatpak", stderr)
+	build := c.fs.Bool("build", false, "also run flatpak-builder and make the repository, the .flatpak and the .flatpakref")
+	if c.fs.Parse(args) != nil || c.fs.NArg() != 0 {
+		return 2
+	}
+	b := c.load(stderr)
+	if b == nil {
+		return 1
+	}
+	o := bundle.Options{Out: *c.out, LauncherDir: *c.from}
+	files := []string{}
+	var err error
+	if *build {
+		files, err = b.BuildFlatpak(context.Background(), o, stderr)
+	} else {
+		var manifest string
+		manifest, err = b.FlatpakFiles(context.Background(), o)
+		files = append(files, manifest)
+	}
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	for _, f := range files {
+		fmt.Fprintln(stdout, f)
+	}
 	return 0
 }
