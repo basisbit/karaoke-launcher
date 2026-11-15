@@ -120,9 +120,9 @@ func TestWindowsRefused(t *testing.T) {
 		change func(f *fixture)
 		want   string
 	}{
-		{"not below appdir", func(f *fixture) {
-			f.launcher["components"].(map[string]any)["game"] = map[string]any{"dir": map[string]any{"windows": "{home}/game"}}
-		}, `must be "{appdir}/<folder>"`},
+		{"no folder", func(f *fixture) {
+			f.launcher["components"].(map[string]any)["game"] = map[string]any{"dir": map[string]any{"linux": "{appdir}/game"}}
+		}, `no "dir.windows"`},
 		{"appdir itself", func(f *fixture) {
 			f.launcher["components"].(map[string]any)["game"] = map[string]any{"dir": map[string]any{"windows": "{appdir}"}}
 		}, `must be "{appdir}/<folder>"`},
@@ -142,5 +142,25 @@ func TestWindowsRefused(t *testing.T) {
 				t.Fatalf("got %v, want %q", err, c.want)
 			}
 		})
+	}
+}
+
+// TestWindowsOutsideApp: a component outside the launcher's folder is not in the package; the launcher installs it at
+// its first start.
+func TestWindowsOutsideApp(t *testing.T) {
+	f, o := windowsFixture(t)
+	f.launcher["components"].(map[string]any)["game"] = map[string]any{"dir": map[string]any{"windows": "{home}/game"}}
+	b, err := f.load(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := b.Windows(context.Background(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name := range zipNames(t, files[0]) {
+		if strings.Contains(name, "game") {
+			t.Errorf("the portable zip has %s", name)
+		}
 	}
 }

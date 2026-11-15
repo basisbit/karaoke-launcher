@@ -163,9 +163,23 @@ type Library struct {
 // Vars are the values of the placeholders.
 type Vars struct {
 	Library  string // {library}: the song folder the user chose (songs are in <song folder>/<feed id>/)
-	AppDir   string // {appdir}: the folder of the launcher executable
+	AppDir   string // {appdir}: the launcher's folder (see AppDir)
 	UserData string // {userdata}: the per-user data folder
 	Home     string // {home}: the user's home folder (only in component folders)
+}
+
+// AppDir returns the launcher's folder for its program file exe: the folder of exe, or in a macOS app
+// (<Name>.app/Contents/MacOS/<exe>) Contents/Resources when launcher.json is there, because Contents/MacOS may only
+// hold programs (Apple TN2206, macOS Code Signing In Depth).
+func AppDir(exe, goos string) string {
+	dir := filepath.Dir(exe)
+	if goos == "darwin" && filepath.Base(dir) == "MacOS" {
+		res := filepath.Join(filepath.Dir(dir), "Resources")
+		if fi, err := os.Stat(filepath.Join(res, "launcher.json")); err == nil && fi.Mode().IsRegular() {
+			return res
+		}
+	}
+	return dir
 }
 
 // Load reads and checks a launcher.json.

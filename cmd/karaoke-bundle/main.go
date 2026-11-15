@@ -24,6 +24,8 @@ Usage:
   karaoke-bundle keygen  <file>                   make a key for signing app.json
   karaoke-bundle windows [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
                                                   make the Windows downloads in <out>/windows
+  karaoke-bundle macos   [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
+                                                  make the macOS app in <out>/macos (a zip; a .dmg on a Mac)
   karaoke-bundle flatpak [--build] [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
                                                   write <out>/flatpak: the manifest and files for flatpak-builder;
                                                   --build also builds the repository, the .flatpak and .flatpakref
@@ -48,6 +50,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return windows(args[1:], stdout, stderr)
 	case "flatpak":
 		return flatpak(args[1:], stdout, stderr)
+	case "macos":
+		return macos(args[1:], stdout, stderr)
 	case "site":
 		return site(args[1:], stdout, stderr)
 	case "keygen":
@@ -173,6 +177,29 @@ func flatpak(args []string, stdout, stderr io.Writer) int {
 	}
 	for _, f := range files {
 		fmt.Fprintln(stdout, f)
+	}
+	return 0
+}
+
+func macos(args []string, stdout, stderr io.Writer) int {
+	c := newFlags("macos", stderr)
+	if c.fs.Parse(args) != nil || c.fs.NArg() != 0 {
+		return 2
+	}
+	b := c.load(stderr)
+	if b == nil {
+		return 1
+	}
+	files, signer, err := b.Macos(context.Background(), bundle.Options{Out: *c.out, LauncherDir: *c.from})
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	for _, f := range files {
+		fmt.Fprintln(stdout, f)
+	}
+	if signer == "" {
+		fmt.Fprintln(stdout, "The app is not signed: neither codesign (on a Mac) nor rcodesign was found. Players may then be told that the app is damaged.")
 	}
 	return 0
 }

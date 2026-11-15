@@ -29,6 +29,7 @@ type Options struct {
 	Out         string // output folder, usually "dist"
 	LauncherDir string // folder with the launcher programs; "": download the release named in bundle.json
 	Makensis    string // the makensis program; "": search PATH; "-": don't build the setup program
+	Signer      string // the program that signs the macOS app (codesign or rcodesign); "": search PATH; "-": don't sign
 }
 
 const (
@@ -48,10 +49,12 @@ func (b *Bundle) Name() string {
 	return b.Config.ID
 }
 
-// componentFolders returns the folder of every component that has an archive for platform, relative to the
-// launcher's folder: components.<id>.dir.<system> must be "{appdir}/<path>". Shipped files must not be inside them,
-// and they must not be inside each other.
-func (b *Bundle) componentFolders(platform, system string) (map[string]string, error) {
+// componentFolders returns the folder of every component that the package for platform contains, relative to the
+// launcher's folder: the components with an archive for platform whose components.<id>.dir.<system> is
+// "{appdir}/<path>". Components in other folders ({userdata}, {home}) are left out: the launcher installs them at its
+// first start. With inApp false (macOS: the app must not change itself), a component in {appdir} is an error.
+// Shipped files must not be inside the folders, and they must not be inside each other.
+func (b *Bundle) componentFolders(platform, system string, inApp bool) (map[string]string, error) {
 	dirs := map[string]string{}
 	for _, id := range slices.Sorted(maps.Keys(b.Components)) {
 		if _, ok := b.Components[id].Files[platform]; !ok {
@@ -59,9 +62,18 @@ func (b *Bundle) componentFolders(platform, system string) (map[string]string, e
 		}
 		cc, _ := b.configComponent(id)
 		raw := cc.Dir[system]
+		if raw == "" {
+			return nil, fmt.Errorf(`component %s has an archive for %s, but no "dir.%s" in launcher.json`, id, platform, system)
+		}
+		if raw != "{appdir}" && !strings.HasPrefix(raw, "{appdir}/") {
+			continue // installed by the launcher at its first start
+		}
+		if !inApp {
+			return nil, fmt.Errorf(`component %s: "dir.%s" in launcher.json is %q; on macOS it must be outside the app, for example "{userdata}/%s": the app must not change itself`, id, system, raw, id)
+		}
 		rel, ok := strings.CutPrefix(raw, "{appdir}/")
 		if !ok || !safeRel(rel) || strings.ContainsAny(rel, "{}") {
-			return nil, fmt.Errorf(`component %s: "dir.%s" in launcher.json is %q; for a package it must be "{appdir}/<folder>"`, id, system, raw)
+			return nil, fmt.Errorf(`component %s: "dir.%s" in launcher.json is %q; in the launcher's folder it must be "{appdir}/<folder>"`, id, system, raw)
 		}
 		for other, orel := range dirs {
 			if inside(rel, orel) || inside(orel, rel) {
@@ -104,22 +116,26 @@ func (b *Bundle) componentArchive(ctx context.Context, f File, cache string) (st
 	return dest, nil
 }
 
-// assemble fills dir with the launcher's folder for platform: the launcher program, the shipped files, the state
-// file of the launcher, and every component with an archive for platform, unpacked into its folder with its state
-// file. It returns the files of the launcher component (without state file).
-func (b *Bundle) assemble(ctx context.Context, o Options, platform, system, exeName, dir string) ([]string, error) {
-	folders, err := b.componentFolders(platform, system)
+// assemble fills dir with the launcher's folder for platform: the shipped files, the state file of the launcher, and
+// every component the package contains (componentFolders), unpacked into its folder with its state file. The launcher
+// program goes to exe; it belongs to the launcher component when it is inside dir. It returns the files of the
+// launcher component (without state file).
+func (b *Bundle) assemble(ctx context.Context, o Options, platform, system, dir, exe string) ([]string, error) {
+	folders, err := b.componentFolders(platform, system, system != "macos")
 	if err != nil {
 		return nil, err
 	}
-	exe, err := b.LauncherBinary(ctx, platform, o.LauncherDir, filepath.Join(o.Out, "cache"))
+	src, err := b.LauncherBinary(ctx, platform, o.LauncherDir, filepath.Join(o.Out, "cache"))
 	if err != nil {
 		return nil, err
 	}
-	if err := copyFile(exe, filepath.Join(dir, exeName), 0o755); err != nil {
+	if err := copyFile(src, exe, 0o755); err != nil {
 		return nil, err
 	}
-	files := []string{exeName}
+	var files []string
+	if rel, err := filepath.Rel(dir, exe); err == nil && filepath.IsLocal(rel) {
+		files = append(files, filepath.ToSlash(rel))
+	}
 	for _, s := range b.Shipped {
 		if err := copyFile(s.Abs, filepath.Join(dir, filepath.FromSlash(s.Rel)), 0o644); err != nil {
 			return nil, err
@@ -164,7 +180,7 @@ func (b *Bundle) Windows(ctx context.Context, o Options) ([]string, error) {
 	}
 	id := b.Config.ID
 	stage := filepath.Join(out, "installer-files", id)
-	files, err := b.assemble(ctx, o, windows, "windows", launcherExe, stage)
+	files, err := b.assemble(ctx, o, windows, "windows", stage, filepath.Join(stage, launcherExe))
 	if err != nil {
 		return nil, err
 	}
