@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"maps"
 	"os"
 	"path/filepath"
@@ -96,6 +97,23 @@ func (b *Bundle) BuildSite(ctx context.Context, o Options, keyFile string) (note
 			}
 		}
 	}
+	// the Flatpak: its repository and, for people, the single file and the .flatpakref
+	if appID := b.Config.AppID; appID != "" {
+		dir := filepath.Join(o.Out, "flatpak")
+		if fi, err := os.Stat(filepath.Join(dir, "repo")); err == nil && fi.IsDir() {
+			if err := copyTree(filepath.Join(dir, "repo"), filepath.Join(out, "flatpak", "repo")); err != nil {
+				return nil, err
+			}
+		}
+		for _, name := range []string{appID + ".flatpak", appID + ".flatpakref"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+				if err := copyFile(filepath.Join(dir, name), filepath.Join(out, "download", name), 0o644); err != nil {
+					return nil, err
+				}
+				downloads = append(downloads, name)
+			}
+		}
+	}
 	if len(downloads) == 0 {
 		notes = append(notes, "No installer or zip was found in "+o.Out+": download/ is empty.")
 	}
@@ -126,4 +144,27 @@ func publish(src, dst string) (update.File, error) {
 	}
 	sum, size, err := hashFile(dst)
 	return update.File{URL: "files/" + filepath.Base(dst), SHA256: sum, Size: size}, err
+}
+
+// copyTree copies the files, folders and links below src to dst.
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(name string, e fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, name)
+		target := filepath.Join(dst, rel)
+		switch {
+		case e.IsDir():
+			return os.MkdirAll(target, 0o755)
+		case e.Type()&fs.ModeSymlink != 0:
+			link, err := os.Readlink(name)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, target)
+		default:
+			return copyFile(name, target, 0o644)
+		}
+	})
 }

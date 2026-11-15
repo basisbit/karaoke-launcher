@@ -29,5 +29,20 @@
         "strip": 0
       }
     }
+  },
+  "flatpak": {
+    "runtime": "org.freedesktop.Platform",
+    "runtime_version": "26.08",
+    "sdk": "org.freedesktop.Sdk",
+    "finish_args": [
+      "--share=network",
+      "--socket=wayland",
+      "--socket=fallback-x11",
+      "--share=ipc",
+      "--device=dri"
+    ],
+    "modules": [
+      "flatpak/game.yml"
+    ]
   }
 }

@@ -100,3 +100,38 @@ func TestSite(t *testing.T) {
 		t.Fatalf("without updates: %v", err)
 	}
 }
+
+func TestSiteFlatpak(t *testing.T) {
+	f := newFixture(t)
+	key, pub := newKey(t)
+	f.launcher["app_id"] = "org.example.Karaoke"
+	f.launcher["updates"].(map[string]any)["key"] = pub
+	delete(f.bundle["components"].(map[string]any)["game"].(map[string]any), "linux-amd64") // no download
+	b, err := f.load(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := Options{Out: t.TempDir()}
+	fp := filepath.Join(o.Out, "flatpak")
+	writeFile(t, filepath.Join(fp, "repo", "config"), []byte("[core]"))
+	writeFile(t, filepath.Join(fp, "repo", "objects", "a"), []byte("object"))
+	os.MkdirAll(filepath.Join(fp, "repo", "refs"), 0o755)
+	if err := os.Symlink("../objects/a", filepath.Join(fp, "repo", "refs", "link")); err != nil {
+		t.Skip("no symbolic links here")
+	}
+	writeFile(t, filepath.Join(fp, "org.example.Karaoke.flatpak"), []byte("bundle"))
+	writeFile(t, filepath.Join(fp, "org.example.Karaoke.flatpakref"), []byte("[Flatpak Ref]"))
+	notes, err := b.BuildSite(context.Background(), o, key)
+	if err != nil || len(notes) != 1 { // only: no launcher archive
+		t.Fatalf("site: %v %v", notes, err)
+	}
+	site := filepath.Join(o.Out, "site")
+	for _, name := range []string{"flatpak/repo/config", "flatpak/repo/objects/a", "download/org.example.Karaoke.flatpak", "download/org.example.Karaoke.flatpakref"} {
+		if _, err := os.Stat(filepath.Join(site, filepath.FromSlash(name))); err != nil {
+			t.Errorf("site has no %s", name)
+		}
+	}
+	if l, err := os.Readlink(filepath.Join(site, "flatpak", "repo", "refs", "link")); err != nil || l != "../objects/a" {
+		t.Errorf("link in the repository: %q %v", l, err)
+	}
+}

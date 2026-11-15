@@ -1,0 +1,9 @@
+# The dummy game of the example bundle in the Flatpak: a shell script, no real game. It goes where launcher.json
+# starts the game ("game/game" in the launcher's folder, which is /app/lib/<id> in the Flatpak).
+name: example-game
+buildsystem: simple
+build-commands:
+  - install -Dm755 game.sh /app/lib/example-bundle/game/game
+sources:
+  - type: file
+    path: game.sh

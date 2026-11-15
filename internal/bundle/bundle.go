@@ -38,7 +38,7 @@ type Bundle struct {
 	Launcher    Release              `json:"launcher"`
 	Files       []string             `json:"files"` // shipped files and folders, relative to bundle.json
 	Components  map[string]Component `json:"components"`
-	Flatpak     json.RawMessage      `json:"flatpak"` // used by the flatpak command
+	Flatpak     *Flatpak             `json:"flatpak"` // only for the flatpak command
 
 	Dir     string         `json:"-"` // folder of bundle.json (absolute)
 	Config  *config.Config `json:"-"` // launcher.json in Dir
@@ -49,6 +49,15 @@ type Bundle struct {
 type Release struct {
 	Version string `json:"version"` // a release tag, for example "v0.2.0"
 	Repo    string `json:"repo"`    // "<owner>/<name>" on GitHub
+}
+
+// Flatpak says how the Flatpak is built (docs.flatpak.org, manifests).
+type Flatpak struct {
+	Runtime        string   `json:"runtime"`         // for example "org.freedesktop.Platform"
+	RuntimeVersion string   `json:"runtime_version"` // for example "26.08"
+	Sdk            string   `json:"sdk"`             // for example "org.freedesktop.Sdk"
+	FinishArgs     []string `json:"finish_args"`     // permissions, for example "--share=network"
+	Modules        []string `json:"modules"`         // the community's flatpak-builder module files, relative to bundle.json
 }
 
 // Component is the version of a program and its archive per system ("<GOOS>-<GOARCH>").
@@ -166,8 +175,40 @@ func (b *Bundle) check() (p Problems) {
 		add(`"launcher" needs "version" (a release tag like "v0.2.0") and "repo" (like "owner/karaoke-launcher").`)
 	}
 	p = append(p, b.checkIcon()...)
+	p = append(p, b.checkFlatpak()...)
 	p = append(p, b.collect()...)
 	p = append(p, b.checkComponents()...)
+	return p
+}
+
+var flatpakNameRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,255}$`)
+
+func (b *Bundle) checkFlatpak() (p Problems) {
+	f := b.Flatpak
+	if f == nil {
+		return nil
+	}
+	add := func(format string, a ...any) { p = append(p, fmt.Sprintf(format, a...)) }
+	if b.Config != nil && b.Config.AppID == "" {
+		add(`"flatpak" needs "app_id" in launcher.json.`)
+	}
+	if !flatpakNameRe.MatchString(f.Runtime) || !flatpakNameRe.MatchString(f.RuntimeVersion) || !flatpakNameRe.MatchString(f.Sdk) {
+		add(`"flatpak" needs "runtime", "runtime_version" and "sdk", like "org.freedesktop.Platform", "26.08", "org.freedesktop.Sdk".`)
+	}
+	for _, a := range f.FinishArgs {
+		if !strings.HasPrefix(a, "--") || strings.ContainsAny(a, " \t\r\n") {
+			add(`"flatpak.finish_args": %q must be one option like "--share=network".`, a)
+		}
+	}
+	for _, m := range f.Modules {
+		full, err := b.local(m)
+		if err == nil {
+			_, err = os.Stat(full)
+		}
+		if err != nil {
+			add(`"flatpak.modules": %v.`, err)
+		}
+	}
 	return p
 }
 
