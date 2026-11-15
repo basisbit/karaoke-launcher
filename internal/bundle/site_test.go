@@ -131,7 +131,7 @@ func TestSiteFlatpak(t *testing.T) {
 			t.Errorf("site has no %s", name)
 		}
 	}
-	if l, err := os.Readlink(filepath.Join(site, "flatpak", "repo", "refs", "link")); err != nil || l != "../objects/a" {
+	if l, err := os.Readlink(filepath.Join(site, "flatpak", "repo", "refs", "link")); err != nil || filepath.ToSlash(l) != "../objects/a" { // Windows writes "\"
 		t.Errorf("link in the repository: %q %v", l, err)
 	}
 }
