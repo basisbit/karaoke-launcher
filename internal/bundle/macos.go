@@ -21,6 +21,9 @@ import (
 // so it shows "A new version is available" with updates.page), and components are installed outside the app at the
 // first start. So an ad-hoc signature stays valid, and the read-only folder macOS may start a downloaded app from
 // (app translocation) does not matter.
+// Apps of "macos.apps" (a game's own app) go to Contents/Helpers/ ("Helper apps and tools", TN2206 table 3). They
+// come in .dmg files, which only macOS opens (hdiutil). The app is signed inside out (TN2206: "signing the outermost
+// bundle last"): first each helper app, then the launcher's app.
 
 const darwin = "darwin-arm64"
 
@@ -48,6 +51,10 @@ func (b *Bundle) Macos(ctx context.Context, o Options) (files []string, signer s
 	if _, err := b.assemble(ctx, o, darwin, "macos", res, filepath.Join(contents, "MacOS", "karaoke-launcher")); err != nil {
 		return nil, "", err
 	}
+	nested, err := b.helperApps(ctx, o, out, filepath.Join(contents, "Helpers"))
+	if err != nil {
+		return nil, "", err
+	}
 	if err := os.WriteFile(filepath.Join(contents, "Info.plist"), b.infoPlist(), 0o644); err != nil {
 		return nil, "", err
 	}
@@ -63,7 +70,7 @@ func (b *Bundle) Macos(ctx context.Context, o Options) (files []string, signer s
 		return nil, "", err
 	}
 	app := filepath.Join(stage, appName)
-	if signer, err = signApp(ctx, o.Signer, app); err != nil {
+	if signer, err = signApp(ctx, o.Signer, append(nested, app)...); err != nil {
 		return nil, "", err
 	}
 
@@ -85,10 +92,65 @@ func (b *Bundle) Macos(ctx context.Context, o Options) (files []string, signer s
 	return append(written, dmg), signer, nil
 }
 
-// signApp signs the app ad hoc (no certificate): with codesign on a Mac ("codesign --force --sign -", TN2206), or with
-// rcodesign on other systems ("rcodesign sign", which signs ad hoc without a key; gregoryszorc.com/docs/apple-codesign).
-// signer is the program: "" searches PATH for codesign, then rcodesign; "-" doesn't sign. It returns the program used.
-func signApp(ctx context.Context, signer, app string) (string, error) {
+// helperApps copies the apps of "macos.apps" from their .dmg files into helpers and returns their folders.
+func (b *Bundle) helperApps(ctx context.Context, o Options, out, helpers string) ([]string, error) {
+	if b.Mac == nil || len(b.Mac.Apps) == 0 {
+		return nil, nil
+	}
+	hdiutil, err := exec.LookPath("hdiutil")
+	if err != nil {
+		return nil, fmt.Errorf("%s comes in a .dmg file, which only macOS can open (hdiutil): make the macOS app on a Mac, for example in the macos job of the workflow (docs/publishing.md)", b.Mac.Apps[0].App)
+	}
+	var dirs []string
+	for _, a := range b.Mac.Apps {
+		dmg := filepath.Join(o.Out, "cache", "apps", strings.TrimPrefix(a.SHA256, "sha256:")+".dmg")
+		if err := fetchChecked(ctx, a.URL, a.SHA256, dmg, maxArchive, 0o644); err != nil {
+			return nil, fmt.Errorf("%s: %v", a.URL, err)
+		}
+		dst := filepath.Join(helpers, a.App)
+		if err := copyFromDMG(ctx, hdiutil, dmg, a.App, dst, out); err != nil {
+			return nil, fmt.Errorf("%s: %v", a.URL, err)
+		}
+		dirs = append(dirs, dst)
+	}
+	return dirs, nil
+}
+
+// copyFromDMG mounts dmg (read-only, not shown in the Finder) in a new folder in tmp, copies the app name in it to dst
+// with ditto (which keeps links, modes and the signature) and unmounts it.
+func copyFromDMG(ctx context.Context, hdiutil, dmg, name, dst, tmp string) error {
+	mnt, err := os.MkdirTemp(tmp, "mount-")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(mnt)
+	if msg, err := exec.CommandContext(ctx, hdiutil, "attach", "-nobrowse", "-readonly", "-noautoopen", "-mountpoint", mnt, dmg).CombinedOutput(); err != nil {
+		return fmt.Errorf("hdiutil attach: %v\n%s", err, msg)
+	}
+	defer exec.Command(hdiutil, "detach", "-force", mnt).Run()
+	src := filepath.Join(mnt, name)
+	if fi, err := os.Stat(src); err != nil || !fi.IsDir() {
+		entries, _ := os.ReadDir(mnt)
+		var have []string
+		for _, e := range entries {
+			have = append(have, e.Name())
+		}
+		return fmt.Errorf("the .dmg has no %s; it has: %s", name, strings.Join(have, ", "))
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	if msg, err := exec.CommandContext(ctx, "ditto", src, dst).CombinedOutput(); err != nil {
+		return fmt.Errorf("ditto: %v\n%s", err, msg)
+	}
+	return nil
+}
+
+// signApp signs apps ad hoc (no certificate), in the order given (nested apps first): with codesign on a Mac
+// ("codesign --force --sign -", TN2206), or with rcodesign on other systems ("rcodesign sign", which signs ad hoc
+// without a key; gregoryszorc.com/docs/apple-codesign). signer is the program: "" searches PATH for codesign, then
+// rcodesign; "-" doesn't sign. It returns the program used.
+func signApp(ctx context.Context, signer string, apps ...string) (string, error) {
 	if signer == "-" {
 		return "", nil
 	}
@@ -103,12 +165,14 @@ func signApp(ctx context.Context, signer, app string) (string, error) {
 			return "", nil
 		}
 	}
-	args := []string{"--force", "--sign", "-", app}
-	if strings.Contains(filepath.Base(signer), "rcodesign") {
-		args = []string{"sign", app}
-	}
-	if msg, err := exec.CommandContext(ctx, signer, args...).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("%s: %v\n%s", signer, err, msg)
+	for _, app := range apps {
+		args := []string{"--force", "--sign", "-", app}
+		if strings.Contains(filepath.Base(signer), "rcodesign") {
+			args = []string{"sign", app}
+		}
+		if msg, err := exec.CommandContext(ctx, signer, args...).CombinedOutput(); err != nil {
+			return "", fmt.Errorf("%s: %v\n%s", signer, err, msg)
+		}
 	}
 	return signer, nil
 }

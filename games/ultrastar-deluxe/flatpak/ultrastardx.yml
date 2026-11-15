@@ -1,0 +1,249 @@
+# UltraStar Deluxe 2026.11.0 with the libraries it needs, for the Flatpak of a bundle (karaoke-bundle flatpak).
+# The modules come from Flathub's manifest of UltraStar Deluxe (github.com/flathub/eu.usdx.UltraStarDeluxe, file
+# eu.usdx.UltraStarDeluxe.yaml at commit 91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591, 2026-11-07) and Flathub's
+# shared module lua5.4 (github.com/flathub/shared-modules, commit b0e640fd5065b15ccb66e1db00c7cc531004ae4c).
+# Differences:
+#   - the libraries are nested modules of ultrastardx (flatpak-builder builds nested modules first);
+#   - the patches are downloaded from those commits (url + sha256) and applied with "patch -p1" (what a "patch"
+#     source does), instead of being copied into this repository;
+#   - left out: install-data.patch and instructions.patch (they install UltraStar Deluxe's own desktop file, icons
+#     and metainfo; the bundle has its own), the debug-info patches, the module link-debug-data and the -gdwarf-3
+#     flags (for Flathub's debug extension), and x-checker-data (Flathub's update checker).
+# The top-level parts of that manifest (sdk-extensions, build-options, cleanup, finish-args) are in ../game.json.
+name: ultrastardx
+buildsystem: autotools
+config-opts:
+  - --with-libprojectM
+  - --with-opencv-cxx-api
+post-install:
+  # A font the runtime has too is removed, and fonts.ini points to the runtime's copy (from Flathub's manifest).
+  # Changed: fc-scan of the 26.08 SDK prints absolute paths (Flathub's 25.08 printed "./…"), so "$PWD/" is cut off
+  # as well; without that, fonts.ini kept the old names of removed fonts and the game stopped at its start
+  # ("Could not load font 'FreeSans/FreeSans.ttf'"). The last command fails the build if that happens again.
+  - |
+    cd ${FLATPAK_DEST}/share/ultrastardx/fonts
+    fc-scan -f '%{file} :fullname=%{fullname}\n' . | while read a b ; do
+      a=${a#"$PWD"/} ; a=${a#./}
+      c=$(fc-list -f '%{file}\n' "$b" | head -n 1)
+      if [ -n "$c" ] ; then sed -i "s:=$a:=$c:" fonts.ini ; rm "$a" ; fi
+    done
+  - for i in ${FLATPAK_DEST}/share/ultrastardx/fonts/*/ ; do [ -n "$(fc-scan -f
+    '%{file}' "$i" | head -n 1)" ] || rm -Rf "$i" ; done
+  - |
+    cd ${FLATPAK_DEST}/share/ultrastardx/fonts
+    sed -n 's/^[A-Za-z0-9]*File[0-9]*=//p' fonts.ini | sort -u | while read f ; do
+      [ -e "$f" ] || { echo "fonts.ini names $f, which is missing" ; exit 1 ; }
+    done
+  - mkdir ${FLATPAK_DEST}/lib/ffmpeg
+sources:
+  - type: git
+    url: https://github.com/UltraStar-Deluxe/USDX.git
+    tag: v2026.11.0
+    commit: 6e15a472d2a6b1192044b9757d11b6d3933deb6e
+    disable-submodules: true
+  - type: file
+    url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/ldflags.patch
+    sha256: 7a3e493b1088fe17d8f30f479c6a8caefcf22157e6e98032f262ee3ec57a7331
+    dest: flathub-patches
+  - type: shell
+    commands:
+      - patch -p1 < flathub-patches/ldflags.patch
+      # Workaround for flathub/org.freedesktop.Sdk.Extension.freepascal#10
+      - cp /usr/lib/sdk/freepascal/etc/fpc.cfg fpc.cfg
+      - ln -s ../fpc.cfg src/
+      - set -- `gcc -print-file-name=crtbegin.o` ; echo -Fl${1%/*} >> fpc.cfg
+
+modules:
+  - name: opencv
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DOPENCV_GENERATE_PKGCONFIG=ON
+      - -DBUILD_TESTS=OFF
+      - -DBUILD_opencv_apps=OFF
+      - -DBUILD_opencv_calib3d=OFF
+      - -DBUILD_opencv_dnn=OFF
+      - -DBUILD_opencv_features2d=OFF
+      - -DBUILD_opencv_flann=OFF
+      - -DBUILD_opencv_gapi=OFF
+      - -DBUILD_opencv_highgui=OFF
+      - -DBUILD_opencv_java_bindings_generator=OFF
+      - -DBUILD_opencv_ml=OFF
+      - -DBUILD_opencv_objdetect=OFF
+      - -DBUILD_opencv_photo=OFF
+      - -DBUILD_opencv_python2=OFF
+      - -DBUILD_opencv_python_bindings_generator=OFF
+      - -DBUILD_opencv_python_tests=OFF
+      - -DBUILD_opencv_stitching=OFF
+      - -DBUILD_opencv_ts=OFF
+      - -DBUILD_opencv_video=OFF
+      - -DCV_TRACE=OFF
+      - -DWITH_PROTOBUF=OFF
+      - -DWITH_FFMPEG=OFF
+      - -DWITH_ADE=OFF
+      - -DWITH_QUIRC=OFF
+      - -DWITH_GTK=OFF
+      - -DWITH_TIFF=OFF
+      - -DWITH_WEBP=OFF
+      - -DWITH_JASPER=OFF
+      - -DWITH_OPENJPEG=OFF
+      - -DWITH_PNG=OFF
+      - -DWITH_OPENEXR=OFF
+      - -DWITH_GDAL=OFF
+      - -DWITH_GDCM=OFF
+      - -DWITH_IMGCODEC_HDR=OFF
+      - -DWITH_IMGCODEC_SUNRASTER=OFF
+      - -DWITH_IMGCODEC_PXM=OFF
+      - -DWITH_IMGCODEC_PFM=OFF
+    cleanup:
+      - /share/opencv4/*cascades
+      - /share/opencv4/valgrind*.supp
+    sources:
+      - type: archive
+        url: https://github.com/opencv/opencv/archive/refs/tags/4.12.0.tar.gz
+        sha256: 44c106d5bb47efec04e531fd93008b3fcd1d27138985c5baf4eafac0e1ec9e9d
+
+  - name: projectm
+    buildsystem: cmake-ninja
+    build-options:
+      arch:
+        x86_64:
+          config-opts:
+            - -DCMAKE_BUILD_TYPE=Release
+            - -DENABLE_PLAYLIST=OFF
+            - -DENABLE_GLES=OFF
+        aarch64:
+          config-opts:
+            - -DCMAKE_BUILD_TYPE=Release
+            - -DENABLE_PLAYLIST=OFF
+            - -DENABLE_GLES=ON
+    cleanup:
+      - /include/projectM-4
+      - /lib/cmake/projectM4
+    sources:
+      - type: archive
+        url: https://github.com/projectM-visualizer/projectm/releases/download/v4.1.6/libprojectM-4.1.6.tar.gz
+        sha256: 1b9e6d56c59fe24e5416da4d42e941a34c982811003e43ac88b5aca8afa52c87
+
+  # Flathub's shared module lua5.4/lua-5.4.json, written here with its files downloaded
+  - name: lua-5.4
+    buildsystem: simple
+    build-commands:
+      - make -j $FLATPAK_BUILDER_N_JOBS CFLAGS="$CFLAGS -fPIC -DLUA_USE_LINUX" linux
+      - make TO_LIB=liblua.so.5.4.6 INSTALL_TOP=$FLATPAK_DEST install
+      - ln -sf liblua.so.5.4.6 $FLATPAK_DEST/lib/liblua.so
+      - ln -sf liblua.so.5.4.6 $FLATPAK_DEST/lib/liblua.so.5.4
+      - make INSTALL_TOP=${FLATPAK_DEST} pc > lua.pc
+      - cat lua.pc.in >> lua.pc
+      - install -Dm644 lua.pc $FLATPAK_DEST/lib/pkgconfig/lua.pc
+      - ln -sf lua.pc $FLATPAK_DEST/lib/pkgconfig/lua54.pc
+      - ln -sf lua.pc $FLATPAK_DEST/lib/pkgconfig/lua5.4.pc
+      - ln -sf lua.pc $FLATPAK_DEST/lib/pkgconfig/lua-5.4.pc
+    sources:
+      - type: archive
+        url: https://www.lua.org/ftp/lua-5.4.6.tar.gz
+        sha256: 7d5ea1b9cb6aa0b59ca3dde1c6adcb57ef83a1ba8e5432c0ecd06bf439b3ad88
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/shared-modules/b0e640fd5065b15ccb66e1db00c7cc531004ae4c/lua5.4/makefile-add-liblua.so-rule.patch
+        sha256: 4b773a37f35dbd87a1d8146ef198a81f81a146625a72c2d05953afb38760701a
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/shared-modules/b0e640fd5065b15ccb66e1db00c7cc531004ae4c/lua5.4/lua.pc.in
+        sha256: 6a16a4edf394defb889f19d876d4b1b72a9755268ab3d1ff66db2b44295d0297
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/shared-modules/b0e640fd5065b15ccb66e1db00c7cc531004ae4c/lua5.4/luaconf.patch
+        sha256: a4f021db8dbbb6a8701e8b116ac04db8a44c7d80504ca219d35f31061be348e2
+        dest: flathub-patches
+      - type: shell
+        commands:
+          - patch -p1 < flathub-patches/makefile-add-liblua.so-rule.patch
+          - patch -p1 < flathub-patches/luaconf.patch
+    cleanup:
+      - /bin
+      - /include
+      - /lib/pkgconfig
+      - /man
+
+  - name: portmidi
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+      - -DCMAKE_C_STANDARD=11
+    cleanup:
+      - '*.a'
+      - libporttime.*
+    sources:
+      - type: archive
+        url: https://sourceforge.net/projects/portmedia/files/portmidi/217/portmidi-src-217.zip
+        sha256: 08e9a892bd80bdb1115213fb72dc29a7bf2ff108b378180586aa65f3cfd42e0f
+      - type: shell
+        commands:
+          - find -type f | while read a ; do tr -d '\r' < "$a" > /tmp/t && cat /tmp/t > "$a" ; done
+      # Patches taken from Debian portmidi 217-6.1 (Flathub's note)
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/00_cmake.diff
+        sha256: 9a73c4453e784f97927d4412a916814b6f2ed864bd5f49d383c6650b8590fd26
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/02_pmlinuxalsa.diff
+        sha256: 7f2a28314abcc989881be5c263806a10f1769192b9d04ff8c80f405a951a7740
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/03_pm_test_Makefile.diff
+        sha256: a0e0b4f544cff8e48ee25a30847fee9780fed918ca8c57c4c777177428d4875d
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/11-pmlinuxalsa.patch
+        sha256: 412d3eb55c8d864a4603376d1f195f004dce5edc72bde2b65ff16b53676cfc37
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/13-disablejni.patch
+        sha256: c11ce1e8fe620d5eb850a9f1ca56506f708e37d4390f1e7edb165544f717749e
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/20-movetest.diff
+        sha256: 938560fc3a6910f9451b11136ab295b68d8b0e0539a3cd0f02550d209bb39202
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/21-hardentests.diff
+        sha256: fe1e36994e5e026ab8eaa459be78a6f5226fcab0020c03f7889ef9dcc70ce81f
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/30-porttime_cmake.diff
+        sha256: e6d26bfd2018e90d68c86cf5c7275480111873487d202bed7b1717a38dfa0fe2
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/40-test_sysex.diff
+        sha256: 6b880643bc2a7a52890c4e9368d67af0714f972b218c5653a1dab4a3ba2b3419
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/41-pm_linux.diff
+        sha256: 6e561decd90198b7a00d9cd38dfa0adb877707f3bc9566ddc0794c0f3b7c3143
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/50-change_assert.diff
+        sha256: 29b3bcd272c1cec777e7e75fedede36c87e514a749f5363428f3f3aa07bbddec
+        dest: flathub-patches
+      - type: file
+        url: https://raw.githubusercontent.com/flathub/eu.usdx.UltraStarDeluxe/91f2dc34493ba3506ebe3d9611a7ea6c7b6a4591/patches/51-remove_assert.diff
+        sha256: d61f7f191f13bac5aba9a905c0d1cedce0bc858fa19071a821e6dd81d6557e2d
+        dest: flathub-patches
+      - type: shell
+        commands:
+          - for p in 00_cmake.diff 02_pmlinuxalsa.diff 03_pm_test_Makefile.diff 11-pmlinuxalsa.patch 13-disablejni.patch
+            20-movetest.diff 21-hardentests.diff 30-porttime_cmake.diff 40-test_sysex.diff 41-pm_linux.diff
+            50-change_assert.diff 51-remove_assert.diff ; do patch -p1 < flathub-patches/$p || exit 1 ; done
+
+  - name: SDL2_image
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DSDL2IMAGE_BACKEND_STB=OFF
+      - -DSDL2IMAGE_DEPS_SHARED=OFF
+      - -DSDL2IMAGE_STRICT=ON
+    sources:
+      - type: archive
+        url: https://github.com/libsdl-org/SDL_image/releases/download/release-2.8.12/SDL2_image-2.8.12.tar.gz
+        sha256: 393f5efb50536ec13ca4f4affb69cc9966d3c3f969e6c5e701faddf9f9785381

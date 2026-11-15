@@ -137,7 +137,7 @@ func (b *Bundle) assemble(ctx context.Context, o Options, platform, system, dir,
 		files = append(files, filepath.ToSlash(rel))
 	}
 	for _, s := range b.Shipped {
-		if err := copyFile(s.Abs, filepath.Join(dir, filepath.FromSlash(s.Rel)), 0o644); err != nil {
+		if err := s.copyTo(filepath.Join(dir, filepath.FromSlash(s.Rel))); err != nil {
 			return nil, err
 		}
 		files = append(files, s.Rel)
@@ -293,7 +293,8 @@ func (b *Bundle) nsis(stage, out, setup string) ([]byte, error) {
 		"ID": b.Config.ID, "Version": b.Version, "Name": name, "NameAmp": strings.ReplaceAll(name, "&", "&&"),
 		"Developer": b.Developer, "OutFile": setup, "Dirs": dirs,
 		"Shortcut": `"$SMPROGRAMS\` + nsisEscape(shortcutName(name, b.Config.ID)) + `.lnk"`,
-		"Removed":  name + " was removed. Your songs and settings are kept.",
+		"Removed":  name + " was removed. Your songs, settings and scores are kept.",
+		"NotAll":   "Some files of " + name + " could not be removed. Close " + name + " and the game, then uninstall again.",
 	})
 	return buf.Bytes(), err
 }
@@ -345,6 +346,18 @@ func zipFolder(dst, dir, prefix string, only []string) error {
 			return err
 		}
 		h.Name, h.Method = prefix+rel, zip.Deflate
+		if e.Type()&fs.ModeSymlink != 0 { // a link stays a link (the folders of a macOS app have some): its target is the content
+			target, err := os.Readlink(name)
+			if err != nil {
+				return err
+			}
+			h.Method = zip.Store
+			w, err := z.CreateHeader(h)
+			if err == nil {
+				_, err = io.WriteString(w, filepath.ToSlash(target))
+			}
+			return err
+		}
 		w, err := z.CreateHeader(h)
 		if err != nil {
 			return err

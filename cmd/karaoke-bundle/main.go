@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
 	"github.com/basisbit/karaoke-launcher/internal/bundle"
@@ -20,7 +21,9 @@ var version = "dev"
 const usage = `karaoke-bundle %s: makes the downloads of a karaoke bundle.
 
 Usage:
-  karaoke-bundle check   [--bundle bundle.json]   check bundle.json and launcher.json
+  karaoke-bundle check   [--bundle bundle.json] [--launcher]
+                                                  check bundle.json and launcher.json; --launcher prints
+                                                  launcher.json as the packages get it
   karaoke-bundle keygen  <file>                   make a key for signing app.json
   karaoke-bundle windows [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
                                                   make the Windows downloads in <out>/windows
@@ -34,13 +37,14 @@ Usage:
                                                   app.json signed with the key (- reads it from stdin)
 
 Put the public key that keygen prints into "updates.key" of launcher.json. Keep the key file secret.
+Games that "game" in bundle.json can name: %s.
 `
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintf(stderr, usage, version)
+		fmt.Fprintf(stderr, usage, version, strings.Join(bundle.GameIDs(), ", "))
 		return 2
 	}
 	switch args[0] {
@@ -61,10 +65,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return kfeed.Run([]string{"kfeed", "keygen", args[1]}, version)
 	case "help", "-h", "--help":
-		fmt.Fprintf(stdout, usage, version)
+		fmt.Fprintf(stdout, usage, version, strings.Join(bundle.GameIDs(), ", "))
 		return 0
 	}
-	fmt.Fprintf(stderr, "unknown command %q\n\n"+usage, args[0], version)
+	fmt.Fprintf(stderr, "unknown command %q\n\n"+usage, args[0], version, strings.Join(bundle.GameIDs(), ", "))
 	return 2
 }
 
@@ -94,6 +98,7 @@ func (c common) load(stderr io.Writer) *bundle.Bundle {
 
 func check(args []string, stdout, stderr io.Writer) int {
 	c := newFlags("check", stderr)
+	show := c.fs.Bool("launcher", false, "also print launcher.json as the packages get it (merged with the game)")
 	if c.fs.Parse(args) != nil || c.fs.NArg() != 0 {
 		return 2
 	}
@@ -102,6 +107,12 @@ func check(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	fmt.Fprintf(stdout, "%s %s is fine: %d files to ship, %d components.\n", b.Config.ID, b.Version, len(b.Shipped), len(b.Components))
+	if g := b.Game; g != nil {
+		fmt.Fprintf(stdout, "Game: %s %s (%s). Its source code: %s\n", g.Name, g.Version, g.License, g.Source)
+	}
+	if *show {
+		stdout.Write(b.LauncherJSON)
+	}
 	return 0
 }
 

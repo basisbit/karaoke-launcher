@@ -18,7 +18,7 @@
   "status.source": "Nummerbron {index} van {count}",
   "status.offline": "Geen verbinding. Later opnieuw proberen.",
   "status.paused": "Download gepauzeerd",
-  "status.gamerunning": "Het spel draait. De download gaat verder als het stopt.",
+  "status.gamerunning": "Het spel draait. De launcher sluit als de download klaar is.",
   "status.problem": "Sommige nummers konden niet worden gedownload. Ze worden later opnieuw geprobeerd.",
   "status.finishing": "Afronden …",
   "songs.title": "Kies je nummers",

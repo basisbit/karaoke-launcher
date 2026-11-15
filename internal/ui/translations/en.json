@@ -18,7 +18,7 @@
   "status.source": "Song source {index} of {count}",
   "status.offline": "No connection. Will try again later.",
   "status.paused": "Download paused",
-  "status.gamerunning": "The game is running. The download continues when it ends.",
+  "status.gamerunning": "The game is running. The launcher closes when the download is finished.",
   "status.problem": "Some songs could not be downloaded. They will be tried again later.",
   "status.finishing": "Finishing …",
   "songs.title": "Choose your songs",

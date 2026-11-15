@@ -18,7 +18,7 @@
   "status.source": "曲の提供元 {index} / {count}",
   "status.offline": "接続できません。あとで再試行します。",
   "status.paused": "ダウンロードを一時停止しました",
-  "status.gamerunning": "ゲームの実行中です。終了後にダウンロードを再開します。",
+  "status.gamerunning": "ゲームの実行中です。ダウンロードが終わるとランチャーは閉じます。",
   "status.problem": "一部の曲をダウンロードできませんでした。あとで再試行します。",
   "status.finishing": "仕上げ中…",
   "songs.title": "曲を選ぶ",

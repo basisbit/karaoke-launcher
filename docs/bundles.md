@@ -1,12 +1,13 @@
 # Bundles: the launcher with your game
 
 This page is for communities that ship the launcher. A **bundle** is the launcher together with your
-`launcher.json`, your logo and other files, and usually your game. The tool `karaoke-bundle` turns it into what
-players download:
+`launcher.json`, your logo and other files, and usually a karaoke game: your own, or one that `karaoke-bundle` knows
+(see [Games](#games)). The tool `karaoke-bundle` turns it into what players download, one download per system with
+the game inside:
 
 - **Windows:** a setup program and a portable zip.
 - **Linux:** a Flatpak (one `.flatpak` file, a `.flatpakref` file and a repository that Flatpak updates from).
-- **macOS:** a zip with the app (Apple Silicon only).
+- **macOS:** a zip with the app (Apple Silicon only); on a Mac also a `.dmg`.
 - **The site:** a folder for your web server with all downloads and the signed `app.json` that keeps the launcher and
   your game up to date (see [updates.md](updates.md)).
 
@@ -30,6 +31,8 @@ my-bundle/
 ```
 
 The folder [examples/bundle](../examples/bundle) is a complete bundle with a dummy game.
+[examples/usdx](../examples/usdx) is a bundle with UltraStar Deluxe: its files only hold what is the community's
+own.
 
 ## `bundle.json`
 
@@ -67,6 +70,8 @@ The folder [examples/bundle](../examples/bundle) is a complete bundle with a dum
 Unknown fields are an error, so a typo doesn't go unnoticed.
 
 - `bundle`: always `1`.
+- `game` (optional): a game that `karaoke-bundle` knows, for example `"ultrastar-deluxe"`, or your own definition as
+  `{"path": "<folder with game.json>"}`. See [Games](#games).
 - `version`: the version of the bundle, for example `1.2.0`: 1 to 64 letters, digits, `.`, `_`, `+` or `-`. It is
   the version of the launcher component in `app.json`, so raise it with every release. File names contain it.
   macOS only gets the leading numbers (`1.2.0` of `1.2.0-beta`).
@@ -103,19 +108,88 @@ Unknown fields are an error, so a typo doesn't go unnoticed.
     `org.freedesktop.Sdk`. Pick a version that Flathub still supports.
   - `finish_args`: the permissions of the app, one option per entry. The launcher needs at least
     `--share=network`, a display (`--socket=wayland`, `--socket=fallback-x11`, `--share=ipc`) and `--device=dri`.
-    Add what your game needs, for example `--socket=pulseaudio` for sound and microphones.
+    Add what your game needs, for example `--socket=pulseaudio` for sound. If your game has its own Flatpak, copy
+    its permissions: Flathub's UltraStar Deluxe, for example, also has `--device=all` (all devices) and
+    `--persist=.ultrastardx` (its settings folder). A game definition adds them for you.
   - `modules`: your [flatpak-builder modules](https://docs.flatpak.org/en/latest/manifests.html#modules), one file
     each (`.yml` or `.json`). They build or copy your game into the Flatpak. Paths of their sources are relative to
     the module file. The launcher's folder in the Flatpak is `/app/lib/<id>` (`<id>` from `launcher.json`), so
     install your game to where `launcher.json` starts it, for example `/app/lib/<id>/game/`.
+  - `sdk_extensions` (optional): SDK extensions the modules need to build, for example a compiler like
+    `org.freedesktop.Sdk.Extension.freepascal` (the manifest's `sdk-extensions`).
+  - `build_options` (optional): the manifest's
+    [`build-options`](https://docs.flatpak.org/en/latest/flatpak-builder-command-reference.html) for all modules, as
+    an object, for example `{"append-path": "/usr/lib/sdk/freepascal/bin"}`.
+  - `cleanup` (optional): files removed after all modules are built (the manifest's `cleanup`), for example
+    `["/include", "/lib/pkgconfig"]`.
+- `macos` (optional, only for the `macos` command): `apps`, a list of apps that go into the launcher's app, each
+  `{"url": "<a .dmg file>", "sha256": "sha256:…", "app": "<the app's folder in the .dmg, like Game.app>"}`. They go
+  to `Contents/Helpers/` of the launcher's app. Only macOS can open a `.dmg`, so then the `macos` command must run on
+  a Mac.
 
 `launcher.json` needs `app_id` for the Flatpak and the macOS app (it is their name, for example
 `org.example.Karaoke`) and `updates` for the site.
 
+## Games
+
+`karaoke-bundle` knows these games (their definitions are in [games/](../games) of this repository):
+
+- `ultrastar-deluxe`: [UltraStar Deluxe](https://usdx.eu/) 2026.11.0.
+
+With `"game": "ultrastar-deluxe"` in `bundle.json` you don't write the game's archives, start command, folders or
+Flatpak modules yourself: the tool adds them to `bundle.json` and `launcher.json`, and the packages get the merged
+`launcher.json`. `karaoke-bundle check --launcher` prints it. What you write yourself wins:
+
+- Objects are merged key by key. A file (an object with `url` or `path`, like an archive) replaces the game's as a
+  whole.
+- Lists inside `flatpak` (`finish_args`, `sdk_extensions`, `cleanup`) are joined: the game's first, each entry once.
+- Any other value you write replaces the game's. For example `"start": {"windows": [...]}` in your `launcher.json`
+  replaces the start command on Windows and keeps the game's on Linux and macOS.
+
+What UltraStar Deluxe gets on each system (component `ultrastar-deluxe`):
+
+- **Windows:** the game's portable zip from its GitHub release, in `game/` of the launcher's folder, so it is in the
+  setup program and the portable zip. The launcher keeps it up to date through `app.json`. The game writes its
+  settings, scores (`Ultrastar.db`), playlists and screenshots into that folder. Updates and uninstalling remove only
+  files that were installed, so these stay, and installing again uses them.
+- **Linux:** the game is built from source inside your Flatpak (modules taken from Flathub's UltraStar Deluxe). This
+  needs the Free Pascal SDK extension and takes long the first time (it builds OpenCV too). Its settings are in
+  `~/.ultrastardx` inside the Flatpak.
+- **macOS:** the game's own app from its `.dmg`, inside the launcher's app (`Contents/Helpers/`). It is updated
+  together with the launcher's app, by a new download. The `macos` command must run on a Mac.
+- **All:** the start command is the game with `-SongPath {library}`; the game searches that folder and its subfolders,
+  so it finds the songs of every feed. Theme packs (pack kind `theme`) go to the game's themes folder.
+
+UltraStar Deluxe is under the GPL (version 2 or later), which asks whoever passes on its programs to also offer its
+source code. Every package gets `licenses/ultrastar-deluxe.txt` with the address of the source code of exactly the
+shipped version, and `check` prints it. Link it on your download page, too. (This is the least the licence asks for;
+whether it is enough for you is your decision.)
+
+### Your own game definition
+
+A game definition is a folder with `game.json` and the files it names:
+
+```json
+{
+  "game": 1,
+  "id": "my-game",
+  "name": "My Game",
+  "version": "1.0",
+  "license": "MIT",
+  "homepage": "https://example.org/",
+  "source": "https://example.org/my-game/source/",
+  "bundle": { "components": {}, "flatpak": { "modules": ["flatpak/my-game.yml"] } },
+  "launcher": { "start": {}, "components": {}, "content": {} }
+}
+```
+
+`bundle` and `launcher` hold parts of `bundle.json` and `launcher.json`, written as there. `flatpak.modules` are
+relative to the definition's folder. Use it with `"game": {"path": "my-game"}`, or offer it to this repository.
+
 ## Commands
 
 ```
-karaoke-bundle check   [--bundle bundle.json]
+karaoke-bundle check   [--bundle bundle.json] [--launcher]
 karaoke-bundle keygen  <file>
 karaoke-bundle windows [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
 karaoke-bundle macos   [--bundle bundle.json] [--out dist] [--launcher-dir <folder>]
@@ -131,7 +205,8 @@ karaoke-bundle site    --key <file or -> [--bundle bundle.json] [--out dist]
 ### `check`
 
 Reads `bundle.json` and `launcher.json` and prints every problem at once. All other commands do the same check
-first.
+first. With a game it prints the game and the address of its source code; `--launcher` prints `launcher.json` as the
+packages get it.
 
 ### `keygen`
 
@@ -145,7 +220,9 @@ Writes `dist/windows/`:
 
 - `<id>-<version>-windows-setup.exe`: the setup program. It installs for the current user only, so it needs no
   administrator rights: into `%LOCALAPPDATA%\Programs\<id>`, with an entry in the Start menu and in the list of
-  installed apps. Uninstalling keeps the songs and settings. The setup program is only made when `makensis`
+  installed apps. Uninstalling removes only what the setup program and the launcher's updates installed (the launcher
+  lists those files); the songs, the settings and whatever the game wrote itself (scores, its settings) stay, and
+  installing again uses them. The setup program is only made when `makensis`
   ([NSIS](https://nsis.sourceforge.io/), version 3) is installed; otherwise run `makensis installer.nsi` in
   `dist/windows` later.
 - `<id>-<version>-windows-portable.zip`: the same files to unpack anywhere.
@@ -159,26 +236,30 @@ right after installing.
 
 Writes `dist/macos/<id>-<version>-macos-arm64.zip` with `<Name>.app` inside, for Macs with Apple Silicon. On a Mac
 (where `hdiutil` exists) it also writes a `.dmg`. Run it on Linux or macOS: Windows loses the executable bit of the
-programs, and the app would not start.
+programs, and the app would not start. With `macos.apps` (UltraStar Deluxe has one) it must run on a Mac.
 
-- The app contains only the launcher: the program in `Contents/MacOS`, and `launcher.json` with your files in
-  `Contents/Resources`, which is the launcher's folder (`{appdir}`) on macOS.
+- The app contains the launcher: the program in `Contents/MacOS`, and `launcher.json` with your files in
+  `Contents/Resources`, which is the launcher's folder (`{appdir}`) on macOS. The apps of `macos.apps` go to
+  `Contents/Helpers/`; `start.macos` reaches them from the launcher's folder, like
+  `["../Helpers/Game.app/Contents/MacOS/game", …]`.
 - The app never changes itself. The launcher does not update itself on macOS: when `app.json` lists a newer version,
-  it shows "A new version is available" with a button that opens `updates.page`. Your game must be outside the app
+  it shows "A new version is available" with a button that opens `updates.page`. A component must be outside the app
   (`dir.macos` like `{userdata}/game`, and `start.macos` like `["{userdata}/game/game", …]`); the launcher installs
-  it at its first start from `app.json` and keeps it up to date. So the app's signature stays valid, and it doesn't
-  matter that macOS may start a downloaded app from a read-only copy.
+  it at its first start from `app.json` and keeps it up to date. A game inside the app (`macos.apps`) is only updated
+  by a new download of the app. So the app's signature stays valid, and it doesn't matter that macOS may start a
+  downloaded app from a read-only copy.
 - The app is signed ad hoc (a signature without a certificate) when `codesign` (on a Mac) or
   [`rcodesign`](https://gregoryszorc.com/docs/apple-codesign/main/) (on Linux) is installed; otherwise the command
-  says that it is not signed. Ad hoc is not the same as a signature by Apple: macOS still warns. See
-  [publishing.md](publishing.md) for what players see.
+  says that it is not signed. The apps in `Contents/Helpers/` are signed first, then the launcher's app (Apple's
+  [TN2206](https://developer.apple.com/library/archive/technotes/tn2206/_index.html): inside out). Ad hoc is not
+  the same as a signature by Apple: macOS still warns. See [publishing.md](publishing.md) for what players see.
 - The bundle identifier of the app is `app_id`; `_` becomes `-`, because macOS doesn't allow `_` there.
 
 ### `flatpak`
 
 Writes `dist/flatpak/<app_id>.json` (the manifest for flatpak-builder) and `dist/flatpak/files/` (the launcher, its
-files, the menu entry, the software centre description and the icons). The manifest first builds your `modules`, then
-adds the launcher.
+files, the menu entry, the software centre description and the icons). The manifest first builds the game's modules
+(copied to `dist/flatpak/games/<id>/`), then your `modules`, then adds the launcher.
 
 The `launcher.json` in the Flatpak has no `updates` and no `components`: Flatpak updates the app itself, the
 launcher and your game together.

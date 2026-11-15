@@ -12,14 +12,15 @@ For every release:
 
 1. Raise `version` in `bundle.json` (and the versions of components that changed, with their new archives and
    hashes).
-2. Build: `karaoke-bundle windows`, `karaoke-bundle macos`, `karaoke-bundle flatpak --build` (on Linux, with
-   `flatpak` and `flatpak-builder` installed). Keep `dist/flatpak/repo/` from the last release, so players download
-   only what changed.
+2. Build: `karaoke-bundle windows`, `karaoke-bundle macos` (on a Mac when the bundle has `macos.apps`, as with
+   UltraStar Deluxe), `karaoke-bundle flatpak --build` (on Linux, with `flatpak` and `flatpak-builder` installed).
+   Keep `dist/flatpak/repo/` from the last release, so players download only what changed.
 3. Make the site: `karaoke-bundle site --key <your key file>`.
 4. Copy `dist/site/` to the server, for example `rsync -a --delete dist/site/ user@example.org:/var/www/karaoke/`.
    Copy the folders `files/`, `download/` and `flatpak/` first and `app.json` with `sig/` last: the launcher may
    read `app.json` while you copy, and it must not list files that are not there yet.
-5. Link the files in `download/` on your website.
+5. Link the files in `download/` on your website. With a game under the GPL (UltraStar Deluxe), also link the
+   source code of the shipped version: `karaoke-bundle check` prints its address.
 
 Every `app.json` gets a sequence number (the time it was made). The launcher refuses an `app.json` that is older
 than one it has already seen, so nobody can send players back to an old version. Always publish the newest site.
@@ -32,7 +33,8 @@ updated any more; if someone else gets it, they can send programs to all your pl
 [examples/bundle/.github/workflows/release.yml](../examples/bundle/.github/workflows/release.yml) is a template for
 a community repository that holds the bundle. When you push a version tag, it builds everything, attaches the
 downloads to the GitHub release of the tag and publishes the site on GitHub Pages. The comments at its top say what
-to set up once (the pinned `karaoke-bundle` version and hash, the secret `APP_KEY`, Pages).
+to set up once (the pinned `karaoke-bundle` version and hashes, the secret `APP_KEY`, Pages). The macOS app is made
+on a Mac runner (`macos-latest`), which has `codesign` and `hdiutil`.
 
 This template has not been run yet. Check the first release carefully.
 

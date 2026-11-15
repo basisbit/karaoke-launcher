@@ -18,7 +18,7 @@
   "status.source": "Fuente de canciones {index} de {count}",
   "status.offline": "Sin conexión. Se volverá a intentar más tarde.",
   "status.paused": "Descarga en pausa",
-  "status.gamerunning": "El juego está abierto. La descarga continúa cuando se cierre.",
+  "status.gamerunning": "El juego está abierto. El lanzador se cierra cuando termine la descarga.",
   "status.problem": "Algunas canciones no se pudieron descargar. Se volverá a intentar más tarde.",
   "status.finishing": "Terminando …",
   "songs.title": "Elige tus canciones",

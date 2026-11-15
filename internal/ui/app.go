@@ -33,6 +33,7 @@ type Options struct {
 	GOOS     string          // runtime.GOOS; tests may set another system
 	Updater  *update.Updater // program updates; nil: none
 	Relaunch func() error    // starts the new launcher after its update (nil: update.Relaunch; tests replace it)
+	Quit     func()          // ends the launcher after the game started (nil: the Fyne app's Quit; tests replace it)
 	// Running lists the programs that run from a folder (nil: update.Running; tests replace it).
 	Running func(dir string) (names []string, ok bool)
 	// Do runs a function on the UI goroutine (nil: fyne.Do). Tests pass a serial runner, because Fyne's test
@@ -61,7 +62,10 @@ type App struct {
 	newsText   string                         // news, once downloaded
 
 	gameRunning bool // only touched on the Fyne goroutine
-	resume      bool // a download was paused for the game
+	played      bool // the game was started: the launcher closes when no download or update runs (closeWhenDone)
+	checking    bool // runUpdates runs: checking for, downloading or installing program updates
+	starting    bool // the feeds are checked before the chosen packs are updated (Start)
+	quitting    bool
 
 	updating    bool       // a program update is installed: Play is disabled
 	updLine     updateLine // the update row on the home screen
@@ -106,19 +110,23 @@ func (a *App) Start() {
 	a.win.SetCloseIntercept(a.onClose)
 	a.setReadmes()
 	if a.o.Updater != nil {
+		a.checking = true
 		go a.runUpdates()
 	}
+	a.starting = true
 	go func() {
 		for _, f := range a.o.Library.Feeds() {
 			a.inspect(f.ID) // remembered for the songs screen; errors show there
 		}
-		if a.o.Library.HasSongs() {
-			a.do(func() {
+		a.do(func() {
+			if a.o.Library.HasSongs() {
 				if err := a.o.Library.Start(nil); err != nil && !errors.Is(err, library.ErrBusy) {
 					a.showError("error.generic", err)
 				}
-			})
-		}
+			}
+			a.starting = false
+			a.closeWhenDone()
+		})
 	}()
 	if n := a.o.Config.News; n != nil {
 		go func() {
@@ -154,6 +162,21 @@ func (a *App) statusChanged(s library.Status) {
 	if a.songs != nil {
 		a.songs.refresh(s)
 	}
+	a.closeWhenDone()
+}
+
+// closeWhenDone ends the launcher once the game was started and no download and no program update runs (UI
+// goroutine). A download that failed counts as finished: the next start tries again.
+func (a *App) closeWhenDone() {
+	if !a.played || a.quitting || a.starting || a.checking || a.updating || a.o.Library.Status().Running {
+		return
+	}
+	a.quitting = true
+	quit := a.o.Quit
+	if quit == nil {
+		quit = a.fa.Quit
+	}
+	quit()
 }
 
 func (a *App) openURL(raw string) {

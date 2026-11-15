@@ -49,11 +49,11 @@ func (b *Bundle) FlatpakFiles(ctx context.Context, o Options) (string, error) {
 		if s.Rel == "launcher.json" {
 			continue
 		}
-		if err := copyFile(s.Abs, filepath.Join(app, filepath.FromSlash(s.Rel)), 0o644); err != nil {
+		if err := s.copyTo(filepath.Join(app, filepath.FromSlash(s.Rel))); err != nil {
 			return "", err
 		}
 	}
-	cfg, err := flatpakConfig(filepath.Join(b.Dir, "launcher.json"))
+	cfg, err := flatpakConfig(b.LauncherJSON)
 	if err != nil {
 		return "", err
 	}
@@ -98,6 +98,18 @@ func (b *Bundle) FlatpakFiles(ctx context.Context, o Options) (string, error) {
 	}
 
 	var modules []any
+	if g := b.Game; g != nil { // the game's modules first, copied from its definition
+		dst := filepath.Join(out, "games", g.ID)
+		if err := os.RemoveAll(dst); err != nil {
+			return "", err
+		}
+		if err := os.CopyFS(dst, g.FS); err != nil {
+			return "", err
+		}
+		for _, m := range g.Modules {
+			modules = append(modules, "games/"+g.ID+"/"+m)
+		}
+	}
 	for _, m := range f.Modules { // the community's modules, from where they are (their sources are relative to them)
 		rel, err := filepath.Rel(out, filepath.Join(b.Dir, filepath.FromSlash(m)))
 		if err != nil {
@@ -116,6 +128,15 @@ func (b *Bundle) FlatpakFiles(ctx context.Context, o Options) (string, error) {
 	if f.FinishArgs == nil {
 		manifest["finish-args"] = []string{}
 	}
+	if len(f.SdkExtensions) > 0 {
+		manifest["sdk-extensions"] = f.SdkExtensions
+	}
+	if len(f.BuildOptions) > 0 {
+		manifest["build-options"] = f.BuildOptions
+	}
+	if len(f.Cleanup) > 0 {
+		manifest["cleanup"] = f.Cleanup
+	}
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return "", err
@@ -125,11 +146,7 @@ func (b *Bundle) FlatpakFiles(ctx context.Context, o Options) (string, error) {
 }
 
 // flatpakConfig returns launcher.json without "updates" and "components": Flatpak updates the programs itself.
-func flatpakConfig(file string) ([]byte, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
+func flatpakConfig(data []byte) ([]byte, error) {
 	var c map[string]json.RawMessage
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, err

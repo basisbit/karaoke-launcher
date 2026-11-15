@@ -196,6 +196,12 @@ func Load(path string) (*Config, error) {
 	if len(data) > MaxSize {
 		return nil, fmt.Errorf("%s is larger than %d bytes", path, MaxSize)
 	}
+	return Parse(data, path)
+}
+
+// Parse checks the content of a launcher.json; path is where it is (its folder is the config folder, and errors
+// name it). karaoke-bundle uses it for a launcher.json merged with a game definition.
+func Parse(data []byte, path string) (*Config, error) {
 	var c Config
 	if err := json.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("%s is not valid JSON: %v", path, err)

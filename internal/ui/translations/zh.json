@@ -18,7 +18,7 @@
   "status.source": "歌曲来源 {index} / {count}",
   "status.offline": "没有网络连接。稍后重试。",
   "status.paused": "下载已暂停",
-  "status.gamerunning": "游戏正在运行。游戏结束后继续下载。",
+  "status.gamerunning": "游戏正在运行。下载完成后启动器将关闭。",
   "status.problem": "部分歌曲无法下载，稍后会重试。",
   "status.finishing": "正在完成…",
   "songs.title": "选择歌曲",

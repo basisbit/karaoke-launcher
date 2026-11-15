@@ -39,10 +39,26 @@ type Bundle struct {
 	Files       []string             `json:"files"` // shipped files and folders, relative to bundle.json
 	Components  map[string]Component `json:"components"`
 	Flatpak     *Flatpak             `json:"flatpak"` // only for the flatpak command
+	Mac         *Macos               `json:"macos"`   // only for the macos command
+	GameRef     *GameRef             `json:"game"`    // the game definition merged into bundle.json and launcher.json
 
-	Dir     string         `json:"-"` // folder of bundle.json (absolute)
-	Config  *config.Config `json:"-"` // launcher.json in Dir
-	Shipped []Shipped      `json:"-"` // launcher.json, the files its look refers to, and Files; sorted by Rel
+	Dir          string         `json:"-"` // folder of bundle.json (absolute)
+	Config       *config.Config `json:"-"` // launcher.json in Dir, merged with the game definition
+	LauncherJSON []byte         `json:"-"` // the text of that launcher.json: what the packages get
+	Game         *Game          `json:"-"` // the game definition; nil without "game"
+	Shipped      []Shipped      `json:"-"` // launcher.json, the files its look refers to, and Files; sorted by Rel
+}
+
+// Macos is what only the macOS app gets.
+type Macos struct {
+	Apps []MacApp `json:"apps"` // apps copied into the launcher's app (Contents/Helpers/<app>)
+}
+
+// MacApp is an app inside a .dmg file on the web (Apple's usual way to hand out apps).
+type MacApp struct {
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
+	App    string `json:"app"` // the folder name of the app in the .dmg, like "Game.app"
 }
 
 // Release is the launcher release a bundle ships.
@@ -53,11 +69,14 @@ type Release struct {
 
 // Flatpak says how the Flatpak is built (docs.flatpak.org, manifests).
 type Flatpak struct {
-	Runtime        string   `json:"runtime"`         // for example "org.freedesktop.Platform"
-	RuntimeVersion string   `json:"runtime_version"` // for example "26.08"
-	Sdk            string   `json:"sdk"`             // for example "org.freedesktop.Sdk"
-	FinishArgs     []string `json:"finish_args"`     // permissions, for example "--share=network"
-	Modules        []string `json:"modules"`         // the community's flatpak-builder module files, relative to bundle.json
+	Runtime        string         `json:"runtime"`         // for example "org.freedesktop.Platform"
+	RuntimeVersion string         `json:"runtime_version"` // for example "26.08"
+	Sdk            string         `json:"sdk"`             // for example "org.freedesktop.Sdk"
+	FinishArgs     []string       `json:"finish_args"`     // permissions, for example "--share=network"
+	Modules        []string       `json:"modules"`         // the community's flatpak-builder module files, relative to bundle.json
+	SdkExtensions  []string       `json:"sdk_extensions"`  // manifest "sdk-extensions", for example a compiler
+	BuildOptions   map[string]any `json:"build_options"`   // manifest "build-options" (for all modules)
+	Cleanup        []string       `json:"cleanup"`         // manifest "cleanup" (files removed after all modules are built)
 }
 
 // Component is the version of a program and its archive per system ("<GOOS>-<GOARCH>").
@@ -76,8 +95,20 @@ type File struct {
 
 // Shipped is a file that goes into every package next to the launcher.
 type Shipped struct {
-	Rel string // path inside the launcher's folder, with "/"
-	Abs string // where it is now
+	Rel  string // path inside the launcher's folder, with "/"
+	Abs  string // where it is now
+	Data []byte // the content when it is made by the tool (the merged launcher.json, the game's notice); else nil
+}
+
+// copyTo writes the shipped file to dst.
+func (s Shipped) copyTo(dst string) error {
+	if s.Data == nil {
+		return copyFile(s.Abs, dst, 0o644)
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, s.Data, 0o644)
 }
 
 // UnmarshalJSON reads {"version": "…", "<GOOS>-<GOARCH>": {file}, …}.
@@ -127,17 +158,36 @@ func Load(file string) (*Bundle, error) {
 	if err != nil {
 		return nil, err
 	}
+	dir, err := filepath.Abs(filepath.Dir(file))
+	if err != nil {
+		return nil, err
+	}
+	raw, err := decodeObject(data)
+	if err != nil {
+		return nil, fmt.Errorf("%s is not a valid bundle.json: %v", file, err)
+	}
+	var game *Game
+	if ref, ok := raw["game"]; ok {
+		var r GameRef
+		js, _ := json.Marshal(ref)
+		if err := json.Unmarshal(js, &r); err != nil {
+			return nil, fmt.Errorf("%s: %v", file, err)
+		}
+		if game, err = loadGame(r, dir); err != nil {
+			return nil, err
+		}
+		raw = mergeJSON(game.Bundle, raw, "").(map[string]any)
+		data, _ = json.Marshal(raw)
+	}
 	var b Bundle
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.DisallowUnknownFields() // a misspelt field would be ignored silently
 	if err := d.Decode(&b); err != nil {
 		return nil, fmt.Errorf("%s is not a valid bundle.json: %v", file, err)
 	}
-	if b.Dir, err = filepath.Abs(filepath.Dir(file)); err != nil {
-		return nil, err
-	}
+	b.Dir, b.Game = dir, game
 	var p Problems
-	if b.Config, err = config.Load(filepath.Join(b.Dir, "launcher.json")); err != nil {
+	if err := b.loadLauncher(); err != nil {
 		p = append(p, err.Error())
 	}
 	p = append(p, b.check()...)
@@ -145,6 +195,28 @@ func Load(file string) (*Bundle, error) {
 		return nil, p
 	}
 	return &b, nil
+}
+
+// loadLauncher reads launcher.json, merges the game definition into it and checks it.
+func (b *Bundle) loadLauncher() error {
+	file := filepath.Join(b.Dir, "launcher.json")
+	data, err := readLimited(file, config.MaxSize)
+	if err != nil {
+		return err
+	}
+	if b.Game != nil {
+		raw, err := decodeObject(data)
+		if err != nil {
+			return fmt.Errorf("%s is not valid JSON: %v", file, err)
+		}
+		if data, err = json.MarshalIndent(mergeJSON(b.Game.Launcher, raw, ""), "", "  "); err != nil {
+			return err
+		}
+		data = append(data, '\n')
+	}
+	b.LauncherJSON = data
+	b.Config, err = config.Parse(data, file)
+	return err
 }
 
 func (b *Bundle) check() (p Problems) {
@@ -176,6 +248,7 @@ func (b *Bundle) check() (p Problems) {
 	}
 	p = append(p, b.checkIcon()...)
 	p = append(p, b.checkFlatpak()...)
+	p = append(p, b.checkMacos()...)
 	p = append(p, b.collect()...)
 	p = append(p, b.checkComponents()...)
 	return p
@@ -195,6 +268,16 @@ func (b *Bundle) checkFlatpak() (p Problems) {
 	if !flatpakNameRe.MatchString(f.Runtime) || !flatpakNameRe.MatchString(f.RuntimeVersion) || !flatpakNameRe.MatchString(f.Sdk) {
 		add(`"flatpak" needs "runtime", "runtime_version" and "sdk", like "org.freedesktop.Platform", "26.08", "org.freedesktop.Sdk".`)
 	}
+	for _, e := range f.SdkExtensions {
+		if !flatpakNameRe.MatchString(e) {
+			add(`"flatpak.sdk_extensions": %q must be an extension id like "org.freedesktop.Sdk.Extension.freepascal".`, e)
+		}
+	}
+	for _, c := range f.Cleanup {
+		if strings.TrimSpace(c) == "" || strings.ContainsAny(c, "\r\n") {
+			add(`"flatpak.cleanup": %q must be a file pattern like "/include".`, c)
+		}
+	}
 	for _, a := range f.FinishArgs {
 		if !strings.HasPrefix(a, "--") || strings.ContainsAny(a, " \t\r\n") {
 			add(`"flatpak.finish_args": %q must be one option like "--share=network".`, a)
@@ -207,6 +290,29 @@ func (b *Bundle) checkFlatpak() (p Problems) {
 		}
 		if err != nil {
 			add(`"flatpak.modules": %v.`, err)
+		}
+	}
+	return p
+}
+
+var appNameRe = regexp.MustCompile(`^[^/\\:]+\.app$`)
+
+func (b *Bundle) checkMacos() (p Problems) {
+	if b.Mac == nil {
+		return nil
+	}
+	for i, a := range b.Mac.Apps {
+		where := fmt.Sprintf(`"macos.apps[%d]"`, i)
+		if err := config.CheckURL(a.URL); err != nil {
+			p = append(p, fmt.Sprintf("%s: %v.", where, err))
+		} else if !strings.HasSuffix(strings.ToLower(a.URL), ".dmg") {
+			p = append(p, fmt.Sprintf("%s: %s is not a .dmg file.", where, a.URL))
+		}
+		if !hashRe.MatchString(a.SHA256) {
+			p = append(p, fmt.Sprintf(`%s needs "sha256" ("sha256:" and 64 hex characters).`, where))
+		}
+		if !appNameRe.MatchString(a.App) || a.App == ".app" {
+			p = append(p, fmt.Sprintf(`%s: "app" %q must be the name of the app in the .dmg, like "Game.app".`, where, a.App))
 		}
 	}
 	return p
@@ -271,6 +377,11 @@ func (b *Bundle) collect() (p Problems) {
 		b.Shipped = append(b.Shipped, Shipped{Rel: rel, Abs: filepath.Join(b.Dir, filepath.FromSlash(rel))})
 	}
 	add("launcher.json")
+	b.Shipped[0].Data = b.LauncherJSON
+	if b.Game != nil {
+		add(b.Game.noticeRel())
+		b.Shipped[len(b.Shipped)-1].Data = b.Game.notice()
+	}
 	if c := b.Config; c != nil {
 		for _, rel := range []string{c.Look.Logo, c.Look.Background, c.Look.Font} {
 			if rel != "" {
@@ -308,6 +419,9 @@ func (b *Bundle) collect() (p Problems) {
 		}
 	}
 	for _, s := range b.Shipped {
+		if s.Data != nil && s.Rel != "launcher.json" {
+			continue // made by the tool
+		}
 		if fi, err := os.Lstat(s.Abs); err != nil || !fi.Mode().IsRegular() {
 			p = append(p, fmt.Sprintf("%s is missing or not a file.", s.Rel))
 		}

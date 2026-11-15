@@ -2,14 +2,15 @@
 # It does not run in the karaoke-launcher repository. See docs/publishing.md there.
 #
 # When you push a version tag (v1.2.0, the same version as "version" in bundle.json), it
-#   1. builds the Windows downloads and the macOS app (signed ad hoc with rcodesign) with karaoke-bundle,
-#   2. builds the Flatpak (in Flathub's container, which can run flatpak-builder),
+#   1. builds the Windows downloads with karaoke-bundle,
+#   2. builds the macOS app on a Mac (signed ad hoc with codesign; a game's own macOS app comes in a .dmg, which
+#      only macOS can open) and the Flatpak (in Flathub's container, which can run flatpak-builder),
 #   3. makes the site with app.json signed by the key in the secret APP_KEY,
 #   4. attaches the downloads to the GitHub release of the tag and publishes the site on GitHub Pages.
 #
 # Before the first run:
-#   - Fill in KARAOKE_BUNDLE_VERSION and KARAOKE_BUNDLE_SHA256 below (from SHA256SUMS of that karaoke-launcher
-#     release; the hash of karaoke-bundle-linux-amd64).
+#   - Fill in KARAOKE_BUNDLE_VERSION, KARAOKE_BUNDLE_SHA256 and KARAOKE_BUNDLE_SHA256_MACOS below (from SHA256SUMS
+#     of that karaoke-launcher release: the hashes of karaoke-bundle-linux-amd64 and karaoke-bundle-darwin-arm64).
 #   - Store the content of your key file (karaoke-bundle keygen) as the repository secret APP_KEY.
 #   - Settings > Pages: choose "GitHub Actions" as the source.
 #   - "site" in bundle.json and "updates.url" in launcher.json must be the address of your Pages site.
@@ -22,9 +23,7 @@ permissions:
 env:
   KARAOKE_BUNDLE_VERSION: vX.Y.Z # the karaoke-launcher release that has karaoke-bundle
   KARAOKE_BUNDLE_SHA256: replace-with-the-sha256-of-karaoke-bundle-linux-amd64
-  # rcodesign signs the macOS app ad hoc on Linux (github.com/indygreg/apple-platform-rs, SHA256SUMS of the release)
-  RCODESIGN_VERSION: 0.29.0
-  RCODESIGN_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
+  KARAOKE_BUNDLE_SHA256_MACOS: replace-with-the-sha256-of-karaoke-bundle-darwin-arm64
   TAG: ${{ github.ref_name }}
 
 jobs:
@@ -41,31 +40,43 @@ jobs:
         run: test "$TAG" = "v$(jq -r .version bundle.json)"
       - name: makensis
         run: sudo apt-get update && sudo apt-get install -y nsis
-      - name: rcodesign
-        run: |
-          name="apple-codesign-$RCODESIGN_VERSION-x86_64-unknown-linux-musl.tar.gz"
-          curl -fsSL -o rcodesign.tar.gz "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F$RCODESIGN_VERSION/$name"
-          echo "$RCODESIGN_SHA256  rcodesign.tar.gz" | sha256sum -c -
-          mkdir rcodesign-files && tar -xzf rcodesign.tar.gz -C rcodesign-files
-          mkdir -p "$HOME/bin" && install -m 755 "$(find rcodesign-files -type f -name rcodesign)" "$HOME/bin/rcodesign"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
-      - name: Windows and macOS
+      - name: Windows
         run: |
           ./karaoke-bundle check
           ./karaoke-bundle windows
-          ./karaoke-bundle macos
       - uses: actions/upload-artifact@v7
         with:
           name: packages
           path: |
             dist/windows/*.zip
             dist/windows/*.exe
-            dist/macos/*.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: karaoke-bundle
           path: karaoke-bundle
+
+  macos:
+    needs: packages # only after the check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Get karaoke-bundle
+        run: |
+          curl -fsSL -o karaoke-bundle "https://github.com/basisbit/karaoke-launcher/releases/download/$KARAOKE_BUNDLE_VERSION/karaoke-bundle-darwin-arm64"
+          echo "$KARAOKE_BUNDLE_SHA256_MACOS  karaoke-bundle" | shasum -a 256 -c -
+          chmod +x karaoke-bundle
+      - name: macOS
+        run: |
+          ./karaoke-bundle macos
+          codesign --verify --deep --strict --verbose=2 dist/macos/app/*.app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: |
+            dist/macos/*.zip
+            dist/macos/*.dmg
+          if-no-files-found: error
 
   flatpak:
     needs: packages
@@ -92,7 +103,7 @@ jobs:
           if-no-files-found: error
 
   site:
-    needs: [packages, flatpak]
+    needs: [packages, macos, flatpak]
     runs-on: ubuntu-latest
     permissions:
       contents: write # the release
@@ -104,7 +115,11 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: packages
-          path: dist
+          path: dist/windows # an artifact holds the files below the folder they share
+      - uses: actions/download-artifact@v8
+        with:
+          name: macos
+          path: dist/macos
       - uses: actions/download-artifact@v8
         with:
           name: flatpak

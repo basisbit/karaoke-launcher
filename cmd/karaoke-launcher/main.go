@@ -5,6 +5,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,6 +30,7 @@ func main() {
 		}
 	}
 	cfgPath := flag.String("config", filepath.Join(appdir, "launcher.json"), "launcher.json to use (for development)")
+	uninstall := flag.Bool("uninstall", false, "remove the installed programs and keep everything else (run by the Windows uninstaller)")
 	flag.Parse()
 
 	cfg, err := config.Load(*cfgPath)
@@ -43,6 +45,9 @@ func main() {
 	}
 	home, _ := os.UserHomeDir()
 	vars := config.Vars{AppDir: appdir, UserData: userdata, Home: home}
+	if *uninstall {
+		os.Exit(uninstallAll(cfg, vars))
+	}
 	defaultLib, err := cfg.LibraryDefault(vars)
 	if err != nil {
 		fatal(nil, "app.error.config", err)
@@ -114,4 +119,26 @@ func fatal(set *settings.Settings, key string, err error) {
 	}
 	tr := ui.NewTranslator(lang)
 	ui.ShowFatal(app.New(), tr, tr.T(key), err)
+}
+
+// uninstallAll removes what the launcher and its updates installed: every component's files, then the launcher's,
+// except the running program (the uninstaller deletes it afterwards). Settings, scores and other files a game wrote,
+// and the songs, stay. Exit code 1 when a file could not be removed (a program still runs); nothing is shown, the
+// uninstaller tells the user.
+func uninstallAll(cfg *config.Config, v config.Vars) int {
+	var errs []error
+	for id := range cfg.Components {
+		if dir, ok, err := cfg.ComponentDir(id, runtime.GOOS, v); ok && err == nil {
+			errs = append(errs, update.Uninstall(dir, id, ""))
+		}
+	}
+	if errors.Join(errs...) == nil { // else the launcher's state file stays: the uninstaller checks it when run again
+		exe, _ := os.Executable()
+		errs = append(errs, update.Uninstall(v.AppDir, config.Launcher, exe))
+	}
+	if err := errors.Join(errs...); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	return 0
 }

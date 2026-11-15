@@ -1,0 +1,24 @@
+{
+  "config": 1,
+  "id": "usdx-example",
+  "name": {"en": "Karaoke Example", "de": "Karaoke-Beispiel"},
+  "app_id": "org.example.KaraokeUSDX",
+  "look": {
+    "logo": "assets/logo.svg",
+    "background": "assets/background.png",
+    "dark": true,
+    "colors": { "primary": "#3b82f6", "background": "#111827", "text": "#f9fafb" }
+  },
+  "links": [
+    { "label": { "en": "Website", "de": "Webseite" }, "url": "https://example.org/" }
+  ],
+  "feeds": [
+    { "id": "local", "address": "http://127.0.0.1:8080/", "starter": ["creative-commons"] }
+  ],
+  "library": { "default": "{userdata}/songs" },
+  "updates": {
+    "url": "http://127.0.0.1:8090/app.json",
+    "key": "ed25519:aT1kuqmwLsSYNNbLRLUiZKwysGkWiiTenUQFqvy1ZJI",
+    "page": "http://127.0.0.1:8090/"
+  }
+}

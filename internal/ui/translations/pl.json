@@ -18,7 +18,7 @@
   "status.source": "Źródło piosenek {index} z {count}",
   "status.offline": "Brak połączenia. Ponowna próba później.",
   "status.paused": "Pobieranie wstrzymane",
-  "status.gamerunning": "Gra jest uruchomiona. Pobieranie będzie kontynuowane po jej zamknięciu.",
+  "status.gamerunning": "Gra jest uruchomiona. Launcher zamknie się po zakończeniu pobierania.",
   "status.problem": "Nie udało się pobrać niektórych piosenek. Zostaną pobrane ponownie później.",
   "status.finishing": "Kończenie …",
   "songs.title": "Wybierz piosenki",
