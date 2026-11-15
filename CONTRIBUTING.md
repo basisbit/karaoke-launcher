@@ -34,7 +34,8 @@ Examples: `feat(ui): show free disk space`, `fix(config): reject absolute logo p
 
 Releases are automatic. A bot keeps a release pull request open that collects the commits on `main` into
 `CHANGELOG.md` and proposes the next version. Merging it creates the tag and the GitHub release, and the launcher
-binaries for Linux, Windows and macOS are attached.
+binaries for Linux, Windows and macOS are attached, together with `karaoke-bundle` for Linux, Windows and macOS
+(amd64 and arm64) and `SHA256SUMS`.
 
 For maintainers, once: the release pull request needs a token that may start workflows, because pull requests
 opened with the default token don't get their required checks. Store a fine-grained personal access token (this
