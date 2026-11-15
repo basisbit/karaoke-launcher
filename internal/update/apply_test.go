@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -197,5 +198,94 @@ func TestApplyUnsafeList(t *testing.T) {
 	apply(t, dir, "game", nil)
 	if _, err := os.Stat(outside); err != nil {
 		t.Fatal("Apply deleted a file outside the folder")
+	}
+}
+
+func TestApplyCaseOnly(t *testing.T) {
+	defer func(f bool) { foldCase = f }(foldCase)
+	foldCase = true // as on Windows and macOS
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "Game.exe"), []byte("v1"), 0o755)
+	WriteState(dir, State{Component: "game", Version: "1", Files: []string{"Game.exe"}})
+	stage(t, dir, "game", "2", map[string]string{"game.exe": "v2"})
+	apply(t, dir, "game", nil)
+	// on a case-insensitive disk both names are one file: the old spelling must not be deleted as stale
+	data, err := os.ReadFile(filepath.Join(dir, "game.exe"))
+	if _, serr := os.Stat(filepath.Join(dir, "Game.exe")); err != nil || string(data) != "v2" || serr != nil {
+		t.Fatalf("files: %v", tree(t, dir))
+	}
+}
+
+func TestApplyFileBecomesFolder(t *testing.T) {
+	dir := t.TempDir()
+	stage(t, dir, "game", "1", map[string]string{"data": "file", "lib/x.bin": "x", "assets/a.png": "a"})
+	apply(t, dir, "game", nil)
+	stage(t, dir, "game", "2", map[string]string{"data/config": "c", "lib": "now a file", "assets/a.png": "a"})
+	apply(t, dir, "game", nil)
+	if got := tree(t, dir); got["data/config"] != "c" || got["lib"] != "now a file" || len(got) != 4 {
+		t.Fatalf("files: %v", got) // + assets/a.png and the state
+	}
+	// a folder with a file of the user is never moved aside to make room for a file
+	os.WriteFile(filepath.Join(dir, "assets", "mine.txt"), []byte("mine"), 0o644)
+	stage(t, dir, "game", "3", map[string]string{"assets": "a file now"})
+	if _, err := Apply(dir, "game", nil); err == nil {
+		t.Fatal("folder with a user file replaced")
+	}
+	got := tree(t, dir)
+	if got["assets/mine.txt"] != "mine" || !Pending(dir, "game") {
+		t.Fatalf("after the refused update: %v, pending %v", got, Pending(dir, "game"))
+	}
+	for name := range got {
+		if strings.Contains(name, ".old-") {
+			t.Fatalf("moved aside: %s", name)
+		}
+	}
+}
+
+func TestApplyOldFileStays(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("needs folder permissions")
+	}
+	dir := t.TempDir()
+	stage(t, dir, "game", "1", map[string]string{"a": "1", "ro/old.bin": "old"})
+	apply(t, dir, "game", nil)
+	os.Chmod(filepath.Join(dir, "ro"), 0o555)
+	defer os.Chmod(filepath.Join(dir, "ro"), 0o755)
+	stage(t, dir, "game", "2", map[string]string{"a": "2"})
+	if _, err := Apply(dir, "game", nil); err == nil {
+		t.Fatal("an old file that can't be removed was dropped silently")
+	}
+	if s := state(t, dir, "game"); s.Version != "1" || !Pending(dir, "game") {
+		t.Fatalf("state %+v, pending %v: the update must be tried again", s, Pending(dir, "game"))
+	}
+}
+
+func TestApplyLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	dir, outside := t.TempDir(), t.TempDir()
+	os.WriteFile(filepath.Join(outside, "old.bin"), []byte("theirs"), 0o644)
+	if err := os.Symlink(outside, filepath.Join(dir, "data")); err != nil {
+		t.Fatal(err)
+	}
+	WriteState(dir, State{Component: "game", Version: "1", Files: []string{"data/old.bin"}})
+	stage(t, dir, "game", "2", map[string]string{"a": "a"})
+	apply(t, dir, "game", nil)
+	if _, err := os.Stat(filepath.Join(outside, "old.bin")); err != nil {
+		t.Fatal("old file deleted through a link")
+	}
+	stage(t, dir, "game", "3", map[string]string{"data/new.bin": "new"})
+	if _, err := Apply(dir, "game", nil); err == nil {
+		t.Fatal("file installed through a link")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "new.bin")); err == nil {
+		t.Fatal("file written through a link")
+	}
+	os.WriteFile(filepath.Join(outside, "x.old-1"), nil, 0o644)
+	os.WriteFile(oldListPath(dir), []byte("data/x.old-1\n"), 0o644)
+	Cleanup(dir)
+	if _, err := os.Stat(filepath.Join(outside, "x.old-1")); err != nil {
+		t.Fatal("Cleanup deleted through a link")
 	}
 }

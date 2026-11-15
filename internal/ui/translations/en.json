@@ -82,5 +82,6 @@
   "update.close.done": "Continue",
   "update.close.later": "Later",
   "update.restart.failed": "The update is installed, but the launcher could not restart itself. Please start it again.",
+  "update.broken": "The game could not be updated completely. Restart the launcher to finish the update.",
   "settings.library.bad": "This folder can't be used for songs: it is already used for something else, or it contains a program or the game's folders. Please choose an empty folder."
 }

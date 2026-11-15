@@ -82,5 +82,6 @@
   "update.close.done": "Continuer",
   "update.close.later": "Plus tard",
   "update.restart.failed": "La mise à jour est installée, mais le lanceur n'a pas pu redémarrer tout seul. Relance-le.",
+  "update.broken": "Le jeu n'a pas pu être mis à jour entièrement. Redémarre le lanceur pour terminer la mise à jour.",
   "settings.library.bad": "Ce dossier ne peut pas servir pour les chansons : il sert déjà à autre chose, ou il contient un programme ou les dossiers du jeu. Choisis un dossier vide."
 }

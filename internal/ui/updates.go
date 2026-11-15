@@ -45,10 +45,10 @@ func (a *App) updateError(err error) {
 func (a *App) runUpdates() {
 	u := a.o.Updater
 	ctx := context.Background()
-	later := map[string]bool{}    // the user chose to install it at the next start
+	skip := map[string]bool{}     // installed at the next start: the user chose "Later", or installing failed
 	for _, t := range u.Targets { // downloaded at an earlier run, not installed yet
 		if t.ID != config.Launcher && update.Pending(t.Dir, t.ID) {
-			later[t.ID] = a.installComponent(t, func() error { return nil })
+			skip[t.ID] = a.installComponent(t, func() error { return nil })
 		}
 	}
 	res, err := u.Check(ctx)
@@ -61,7 +61,7 @@ func (a *App) runUpdates() {
 			self = &up
 			continue
 		}
-		if !later[up.ID] {
+		if !skip[up.ID] {
 			a.installComponent(up.Target, func() error { return u.Stage(ctx, up, nil) })
 		}
 	}
@@ -85,31 +85,40 @@ func (a *App) runUpdates() {
 	}
 }
 
-// installComponent downloads an update of a component such as the game (stage) and installs it, with Play disabled.
-// Before installing, the user is asked to close the game. It returns true when the user chose to do that later: the
-// download stays and is installed after the next start.
-func (a *App) installComponent(t update.Target, stage func() error) (later bool) {
+// installComponent downloads an update of a component such as the game (stage) and installs it, with Play disabled
+// and no feed sync running (a theme folder may be inside the game's folder). Before installing, the user is asked to
+// close the game. It returns true when the update waits for the next start: the user chose "Later", or installing
+// failed part-way. Then the game has old and new files, so Play stays disabled.
+func (a *App) installComponent(t update.Target, stage func() error) (skip bool) {
 	a.doWait(func() {
 		a.updating = true
 		a.setUpdateLine(updateLine{text: "update.game"})
 		a.statusChanged(a.o.Library.Status())
 	})
 	err := stage()
+	broken := false
 	if err == nil {
 		a.waitForGame()
-		if later = !a.gameClosed(t.Dir); !later {
-			_, err = update.Apply(t.Dir, t.ID, t.Keep)
+		if skip = !a.gameClosed(t.Dir); !skip {
+			a.o.Library.Exclusive(func() { _, err = update.Apply(t.Dir, t.ID, t.Keep) })
+			broken = err != nil && update.Pending(t.Dir, t.ID)
+			skip = broken
 		}
 	}
 	a.doWait(func() {
 		a.updating = false
-		a.setUpdateLine(updateLine{})
+		a.updBroken = a.updBroken || broken
+		if a.updBroken {
+			a.setUpdateLine(updateLine{text: "update.broken"})
+		} else {
+			a.setUpdateLine(updateLine{})
+		}
 		a.statusChanged(a.o.Library.Status())
 		if err != nil {
 			a.updateError(err)
 		}
 	})
-	return later
+	return skip
 }
 
 // waitForGame returns when no game that the launcher started runs. Play stays disabled while updating, so none can

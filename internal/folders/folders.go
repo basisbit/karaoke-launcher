@@ -71,11 +71,31 @@ func Mark(dir, purpose, text string) error {
 	return os.WriteFile(filepath.Join(dir, Name), []byte(want), 0o644)
 }
 
-// Within reports whether dir is parent or a folder inside it. Both are made absolute; on Windows and macOS upper and
-// lower case count as the same.
+// resolve makes p absolute and follows the links in it, also when p doesn't exist yet: then the links of the
+// nearest folder above it that exists are followed.
+func resolve(p string) (string, error) {
+	p, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	rest := ""
+	for {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return filepath.Join(r, rest), nil
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return filepath.Join(p, rest), nil
+		}
+		rest, p = filepath.Join(filepath.Base(p), rest), parent
+	}
+}
+
+// Within reports whether dir is parent or a folder inside it. Both are made absolute and links in them are followed,
+// so that two names of one folder count as the same; on Windows and macOS upper and lower case count as the same.
 func Within(dir, parent string) bool {
-	d, err1 := filepath.Abs(dir)
-	p, err2 := filepath.Abs(parent)
+	d, err1 := resolve(dir)
+	p, err2 := resolve(parent)
 	if err1 != nil || err2 != nil {
 		return false
 	}

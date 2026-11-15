@@ -82,5 +82,6 @@
   "update.close.done": "继续",
   "update.close.later": "稍后",
   "update.restart.failed": "更新已安装，但启动器无法自行重新启动。请重新打开它。",
+  "update.broken": "游戏未能完全更新。请重新启动启动器以完成更新。",
   "settings.library.bad": "此文件夹不能用于歌曲：它已被用于其他用途，或其中包含程序或游戏的文件夹。请选择一个空文件夹。"
 }

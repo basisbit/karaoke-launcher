@@ -82,5 +82,6 @@
   "update.close.done": "Dalej",
   "update.close.later": "Później",
   "update.restart.failed": "Aktualizacja została zainstalowana, ale launcher nie mógł sam uruchomić się ponownie. Uruchom go jeszcze raz.",
+  "update.broken": "Nie udało się w pełni zaktualizować gry. Uruchom launcher ponownie, aby dokończyć aktualizację.",
   "settings.library.bad": "Tego folderu nie można użyć na piosenki: jest już używany do czegoś innego albo zawiera program lub foldery gry. Wybierz pusty folder."
 }
