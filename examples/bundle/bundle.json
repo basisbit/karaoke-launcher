@@ -20,12 +20,17 @@
       "version": "1.0.0",
       "windows-amd64": {
         "path": "game/game-windows-amd64.zip",
-        "sha256": "sha256:38ae256d89dddf528724a1de9382aa6d3bc1d62a5ae2cb122354acab7c2b33d4",
+        "sha256": "sha256:441903eddc227470520e749d10fc9847ab3bf35ff10588e42bf0722e2740a5e0",
         "strip": 0
       },
       "linux-amd64": {
         "path": "game/game-linux-amd64.zip",
-        "sha256": "sha256:a53d35eaa5b1118c889af971381dd6cdec636779a710eefeabc220dde57d4d94",
+        "sha256": "sha256:0e30f42180201c17238e363b8396514e0c93fe6d32f0d4deac3cdc25ba187bd3",
+        "strip": 0
+      },
+      "darwin-arm64": {
+        "path": "game/game-darwin-arm64.zip",
+        "sha256": "sha256:5f7ca4a287df7c084e1bccb022ed837e6052fc7f1c0312556fe4bd1049af614b",
         "strip": 0
       }
     }

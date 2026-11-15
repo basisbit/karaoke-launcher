@@ -18,7 +18,8 @@
   "library": { "default": "{userdata}/songs" },
   "start": {
     "windows": ["game/game.exe", "--songs", "{library}"],
-    "linux": ["game/game", "--songs", "{library}"]
+    "linux": ["game/game", "--songs", "{library}"],
+    "macos": ["{userdata}/game/game", "--songs", "{library}"]
   },
   "updates": {
     "url": "http://127.0.0.1:8090/app.json",
@@ -27,7 +28,7 @@
   },
   "components": {
     "game": {
-      "dir": { "windows": "{appdir}/game", "linux": "{appdir}/game" },
+      "dir": { "windows": "{appdir}/game", "linux": "{appdir}/game", "macos": "{userdata}/game" },
       "keep": ["game-run.txt"]
     }
   }

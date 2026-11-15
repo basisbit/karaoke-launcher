@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Builds the dummy game of the example bundle for Windows and Linux (amd64), packs each build into
+# Builds the dummy game of the example bundle for Windows, Linux (amd64) and macOS (arm64), packs each build into
 # game/game-<system>.zip and writes the version and the SHA-256 of the archives into bundle.json.
 # Usage: ./make-game.sh 1.0.0   (needs Go and Python 3)
 set -euo pipefail
 cd "$(dirname "$0")"
 version=${1:?usage: make-game.sh <version>}
-for platform in windows-amd64 linux-amd64; do
+for platform in windows-amd64 linux-amd64 darwin-arm64; do
 	goos=${platform%-*}
 	goarch=${platform#*-}
 	exe=game
@@ -36,4 +36,4 @@ for platform, entry in game.items():
 with open("bundle.json", "w", encoding="utf-8") as f:
     f.write(json.dumps(b, indent=2, ensure_ascii=False) + "\n")
 PY
-echo "game $version: game/game-windows-amd64.zip, game/game-linux-amd64.zip; bundle.json updated"
+echo "game $version: game/game-{windows-amd64,linux-amd64,darwin-arm64}.zip; bundle.json updated"

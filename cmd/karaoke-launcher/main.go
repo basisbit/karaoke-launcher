@@ -25,7 +25,7 @@ func main() {
 	appdir := "."
 	if exe, err := os.Executable(); err == nil {
 		if exe, err = filepath.EvalSymlinks(exe); err == nil {
-			appdir = filepath.Dir(exe)
+			appdir = config.AppDir(exe, runtime.GOOS)
 		}
 	}
 	cfgPath := flag.String("config", filepath.Join(appdir, "launcher.json"), "launcher.json to use (for development)")

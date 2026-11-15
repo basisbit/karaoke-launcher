@@ -345,3 +345,25 @@ func TestNameTranslations(t *testing.T) {
 		t.Error("fallback order")
 	}
 }
+
+func TestAppDir(t *testing.T) {
+	base := t.TempDir()
+	contents := filepath.Join(base, "Karaoke.app", "Contents")
+	exe := filepath.Join(contents, "MacOS", "karaoke-launcher")
+	res := filepath.Join(contents, "Resources")
+	if got := AppDir(exe, "darwin"); got != filepath.Dir(exe) { // no launcher.json in Resources yet
+		t.Fatalf("without Resources/launcher.json: %s", got)
+	}
+	os.MkdirAll(res, 0o755)
+	os.WriteFile(filepath.Join(res, "launcher.json"), []byte("{}"), 0o644)
+	if got := AppDir(exe, "darwin"); got != res {
+		t.Fatalf("macOS app: %s", got)
+	}
+	if got := AppDir(exe, "linux"); got != filepath.Dir(exe) {
+		t.Fatalf("linux: %s", got)
+	}
+	plain := filepath.Join(base, "karaoke", "karaoke-launcher")
+	if got := AppDir(plain, "darwin"); got != filepath.Dir(plain) {
+		t.Fatalf("macOS without app: %s", got)
+	}
+}
