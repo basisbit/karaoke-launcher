@@ -1,0 +1,60 @@
+; Installer written by karaoke-bundle (version {{.Version}}). Build it with:
+;   makensis -INPUTCHARSET UTF8 installer.nsi
+; Per user, without administrator rights (nsis.sourceforge.io/Docs/Chapter4.html).
+Unicode true
+RequestExecutionLevel user
+SetCompressor /SOLID lzma
+
+Name {{q .Name}} {{q .NameAmp}}
+OutFile {{q .OutFile}}
+InstallDir "$LOCALAPPDATA\Programs\{{.ID}}"
+Icon "karaoke-launcher.ico"
+UninstallIcon "karaoke-launcher.ico"
+
+!define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{.ID}}"
+
+Page instfiles
+UninstPage uninstConfirm
+UninstPage instfiles
+
+Section
+  SetShellVarContext current
+  ; A folder that this installer did not make is never filled (and so never removed by the uninstaller).
+  IfFileExists "$INSTDIR\.component-launcher.json" install
+  IfFileExists "$INSTDIR\*.*" 0 install
+  MessageBox MB_OK|MB_ICONSTOP "The folder $INSTDIR already exists, but it was not made by this installer. Nothing was installed." /SD IDOK
+  Abort
+install:
+{{- range .Dirs}}
+  SetOutPath {{.Target}}
+{{- range .Files}}
+  File {{.}}
+{{- end}}
+{{- end}}
+  SetOutPath "$INSTDIR"
+  File "karaoke-launcher.ico"
+  WriteUninstaller "$INSTDIR\karaoke-launcher-uninstall.exe"
+  CreateShortcut {{.Shortcut}} "$INSTDIR\karaoke-launcher.exe" "" "$INSTDIR\karaoke-launcher.ico" 0
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayName" {{q .Name}}
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion" {{q .Version}}
+  WriteRegStr HKCU "${UNINST_KEY}" "Publisher" {{q .Developer}}
+  WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\karaoke-launcher.ico"
+  WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\karaoke-launcher-uninstall.exe$\""
+  WriteRegStr HKCU "${UNINST_KEY}" "QuietUninstallString" "$\"$INSTDIR\karaoke-launcher-uninstall.exe$\" /S"
+  WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1
+SectionEnd
+
+Section "Uninstall"
+  SetShellVarContext current
+  ; Only a folder that the installer made is removed.
+  IfFileExists "$INSTDIR\.component-launcher.json" ours
+  MessageBox MB_OK|MB_ICONSTOP "$INSTDIR was not made by the installer. Nothing was removed." /SD IDOK
+  Abort
+ours:
+  Delete {{.Shortcut}}
+  DeleteRegKey HKCU "${UNINST_KEY}"
+  RMDir /r "$INSTDIR"
+  MessageBox MB_OK|MB_ICONINFORMATION {{q .Removed}} /SD IDOK
+SectionEnd
