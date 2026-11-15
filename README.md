@@ -15,6 +15,10 @@ them up to date and start their karaoke game, without admin rights and without a
 The launcher can also keep itself and the community's game up to date from a file the community signs with its own
 key. See [docs/updates.md](docs/updates.md).
 
+For communities there is also `karaoke-bundle`, a tool that turns your `launcher.json`, your files and your game into
+a Windows setup program, a Flatpak for Linux, a macOS app and a folder for your web server. See
+[docs/bundles.md](docs/bundles.md) and [docs/publishing.md](docs/publishing.md).
+
 The launcher works with any game that reads songs from a folder. It contains no code for one particular game.
 Songs come from feeds in the [karaoke-feeds](https://github.com/basisbit/karaoke-feeds) format. Each song has a
 checksum, and a feed can be signed.
@@ -27,6 +31,12 @@ see the package list in Fyne's [Getting started](https://docs.fyne.io/started/) 
 ```
 go build -o karaoke-launcher ./cmd/karaoke-launcher
 go test ./...
+```
+
+The bundle tool is plain Go and builds for any system without a C compiler:
+
+```
+CGO_ENABLED=0 go build -o karaoke-bundle ./cmd/karaoke-bundle
 ```
 
 ## Trying it

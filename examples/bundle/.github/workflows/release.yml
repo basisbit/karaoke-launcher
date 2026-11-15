@@ -1,0 +1,142 @@
+# Template for a community's repository (copy it to .github/workflows/release.yml at the top of your repository).
+# It does not run in the karaoke-launcher repository. See docs/publishing.md there.
+#
+# When you push a version tag (v1.2.0, the same version as "version" in bundle.json), it
+#   1. builds the Windows downloads and the macOS app (signed ad hoc with rcodesign) with karaoke-bundle,
+#   2. builds the Flatpak (in Flathub's container, which can run flatpak-builder),
+#   3. makes the site with app.json signed by the key in the secret APP_KEY,
+#   4. attaches the downloads to the GitHub release of the tag and publishes the site on GitHub Pages.
+#
+# Before the first run:
+#   - Fill in KARAOKE_BUNDLE_VERSION and KARAOKE_BUNDLE_SHA256 below (from SHA256SUMS of that karaoke-launcher
+#     release; the hash of karaoke-bundle-linux-amd64).
+#   - Store the content of your key file (karaoke-bundle keygen) as the repository secret APP_KEY.
+#   - Settings > Pages: choose "GitHub Actions" as the source.
+#   - "site" in bundle.json and "updates.url" in launcher.json must be the address of your Pages site.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+env:
+  KARAOKE_BUNDLE_VERSION: vX.Y.Z # the karaoke-launcher release that has karaoke-bundle
+  KARAOKE_BUNDLE_SHA256: replace-with-the-sha256-of-karaoke-bundle-linux-amd64
+  # rcodesign signs the macOS app ad hoc on Linux (github.com/indygreg/apple-platform-rs, SHA256SUMS of the release)
+  RCODESIGN_VERSION: 0.29.0
+  RCODESIGN_SHA256: dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  packages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Get karaoke-bundle
+        run: |
+          curl -fsSL -o karaoke-bundle "https://github.com/basisbit/karaoke-launcher/releases/download/$KARAOKE_BUNDLE_VERSION/karaoke-bundle-linux-amd64"
+          echo "$KARAOKE_BUNDLE_SHA256  karaoke-bundle" | sha256sum -c -
+          chmod +x karaoke-bundle
+      - name: The tag must be the version in bundle.json
+        run: test "$TAG" = "v$(jq -r .version bundle.json)"
+      - name: makensis
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      - name: rcodesign
+        run: |
+          name="apple-codesign-$RCODESIGN_VERSION-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL -o rcodesign.tar.gz "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F$RCODESIGN_VERSION/$name"
+          echo "$RCODESIGN_SHA256  rcodesign.tar.gz" | sha256sum -c -
+          mkdir rcodesign-files && tar -xzf rcodesign.tar.gz -C rcodesign-files
+          mkdir -p "$HOME/bin" && install -m 755 "$(find rcodesign-files -type f -name rcodesign)" "$HOME/bin/rcodesign"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Windows and macOS
+        run: |
+          ./karaoke-bundle check
+          ./karaoke-bundle windows
+          ./karaoke-bundle macos
+      - uses: actions/upload-artifact@v7
+        with:
+          name: packages
+          path: |
+            dist/windows/*.zip
+            dist/windows/*.exe
+            dist/macos/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: karaoke-bundle
+          path: karaoke-bundle
+
+  flatpak:
+    needs: packages
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: karaoke-bundle
+      - name: Flatpak
+        run: |
+          chmod +x karaoke-bundle
+          ./karaoke-bundle flatpak --build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak
+          path: |
+            dist/flatpak/repo
+            dist/flatpak/*.flatpak
+            dist/flatpak/*.flatpakref
+          if-no-files-found: error
+
+  site:
+    needs: [packages, flatpak]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: karaoke-bundle
+      - uses: actions/download-artifact@v8
+        with:
+          name: packages
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: flatpak
+          path: dist/flatpak
+      - name: Site
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+        run: |
+          chmod +x karaoke-bundle
+          printf '%s\n' "$APP_KEY" | ./karaoke-bundle site --key -
+      - name: Attach the downloads to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --verify-tag --title "$TAG" --notes ""
+          gh release upload "$TAG" dist/site/download/* --clobber
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist/site
+
+  pages:
+    needs: site
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

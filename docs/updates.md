@@ -158,6 +158,6 @@ are the same file.
 
 - Archives and `app.json` can be on different servers, but only `https://` addresses are accepted.
 - Flatpak updates the programs in a Flatpak package itself. That is why the bundle tool leaves `updates` and
-  `components` out of the `launcher.json` it puts into a Flatpak (planned; see the bundle tool documentation).
+  `components` out of the `launcher.json` it puts into a Flatpak (see [bundles.md](bundles.md)).
 - Windows programs from the launcher are not signed with a certificate. Windows SmartScreen may warn about them, and
   macOS blocks an unsigned app until the user allows it.
