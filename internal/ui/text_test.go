@@ -60,7 +60,7 @@ func TestStatusText(t *testing.T) {
 }
 
 func TestCleanNews(t *testing.T) {
-	in := "  Party on Friday!\r\n\tBring\x00 friends\x1b[31m ‮evil‬\nbad utf8 \xff end  "
+	in := "  Party on Friday!\r\n\tBring\x00 friends\x1b[31m \u202eevil\u202c\nbad utf8 \xff end  "
 	want := "Party on Friday!\n Bring friends[31m evil\nbad utf8  end"
 	if got := cleanNews([]byte(in)); got != want {
 		t.Fatalf("%q, want %q", got, want)
