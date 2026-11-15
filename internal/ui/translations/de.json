@@ -82,5 +82,6 @@
   "update.close.done": "Weiter",
   "update.close.later": "Später",
   "update.restart.failed": "Das Update ist installiert, aber der Launcher konnte sich nicht selbst neu starten. Bitte starte ihn noch einmal.",
+  "update.broken": "Das Spiel konnte nicht vollständig aktualisiert werden. Starte den Launcher neu, damit das Update fertig wird.",
   "settings.library.bad": "Dieser Ordner kann nicht für Songs genutzt werden: Er wird schon für etwas anderes genutzt, oder er enthält ein Programm oder die Ordner des Spiels. Bitte wähle einen leeren Ordner."
 }

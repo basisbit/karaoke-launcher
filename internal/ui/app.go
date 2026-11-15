@@ -66,6 +66,7 @@ type App struct {
 	updating    bool       // a program update is installed: Play is disabled
 	updLine     updateLine // the update row on the home screen
 	updErrShown bool
+	updBroken   bool                  // a program update failed part-way: Play stays disabled until the next start finishes it
 	closeAsk    *dialog.ConfirmDialog // the question to close the game before its update, while it is shown
 }
 

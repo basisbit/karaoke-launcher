@@ -82,5 +82,6 @@
   "update.close.done": "Continuar",
   "update.close.later": "Más tarde",
   "update.restart.failed": "La actualización está instalada, pero el lanzador no pudo reiniciarse solo. Vuelve a abrirlo.",
+  "update.broken": "El juego no se pudo actualizar por completo. Reinicia el lanzador para terminar la actualización.",
   "settings.library.bad": "Esta carpeta no se puede usar para canciones: ya se usa para otra cosa o contiene un programa o las carpetas del juego. Elige una carpeta vacía."
 }

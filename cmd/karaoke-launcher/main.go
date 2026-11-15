@@ -53,16 +53,7 @@ func main() {
 		fatal(nil, "error.generic", err)
 		return
 	}
-	var feeds []library.Feed
-	for _, f := range cfg.Feeds {
-		feeds = append(feeds, library.Feed{ID: f.ID, Address: f.Address, Key: f.Key, Starter: f.Starter, Trusted: f.Key != ""})
-	}
-	if cfg.AllowOtherFeeds {
-		for _, f := range set.Feeds {
-			feeds = append(feeds, library.Feed{ID: library.AddedID(f.Address), Address: f.Address, Key: f.Key})
-		}
-	}
-	lib, err := library.Open(userdata, set.Library, feeds, nil)
+	lib, err := library.Open(userdata, set.Library, ui.LibraryFeeds(cfg, set), nil)
 	if err != nil {
 		if errors.Is(err, library.ErrRunning) {
 			os.Exit(0) // the other window is open already; a second one would only confuse

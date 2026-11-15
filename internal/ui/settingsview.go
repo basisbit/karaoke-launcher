@@ -220,17 +220,22 @@ func (a *App) importBox() fyne.CanvasObject {
 	return box
 }
 
-// libraryFeeds is the feed list of the library: the config's feeds plus the user's.
-func (a *App) libraryFeeds() []library.Feed {
+// LibraryFeeds is the feed list of the library: the feeds of launcher.json (trusted with packs of other kinds when
+// they have a key) and, when launcher.json allows it, the ones the user added (never trusted).
+func LibraryFeeds(cfg *config.Config, set *settings.Settings) []library.Feed {
 	var feeds []library.Feed
-	for _, f := range a.o.Config.Feeds {
-		feeds = append(feeds, library.Feed{ID: f.ID, Address: f.Address, Key: f.Key, Starter: f.Starter})
+	for _, f := range cfg.Feeds {
+		feeds = append(feeds, library.Feed{ID: f.ID, Address: f.Address, Key: f.Key, Starter: f.Starter, Trusted: f.Key != ""})
 	}
-	for _, f := range a.o.Settings.Feeds {
-		feeds = append(feeds, library.Feed{ID: library.AddedID(f.Address), Address: f.Address, Key: f.Key})
+	if cfg.AllowOtherFeeds {
+		for _, f := range set.Feeds {
+			feeds = append(feeds, library.Feed{ID: library.AddedID(f.Address), Address: f.Address, Key: f.Key})
+		}
 	}
 	return feeds
 }
+
+func (a *App) libraryFeeds() []library.Feed { return LibraryFeeds(a.o.Config, a.o.Settings) }
 
 // addSource checks a feed, shows who runs it and whether it is signed, and adds it after a confirmation.
 func (a *App) addSource(address string) {

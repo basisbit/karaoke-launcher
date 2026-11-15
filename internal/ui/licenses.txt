@@ -911,7 +911,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115022656-8a011db90640
+github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115120226-d49822d38264
 ------------------------------------------------------------
 --- LICENSE ---
 

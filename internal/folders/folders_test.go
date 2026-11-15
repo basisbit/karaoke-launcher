@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -67,5 +68,23 @@ func TestMarkedParent(t *testing.T) {
 	Mark(filepath.Join(base, "lib"), Songs, "# Songs")
 	if MarkedParent(deep) != Songs || MarkedParent(filepath.Join(base, "lib")) != "" {
 		t.Fatal("marker of a parent not found, or the folder itself counted")
+	}
+}
+
+func TestWithinLinks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symbolic links need extra rights on Windows")
+	}
+	base := t.TempDir()
+	real, alias := filepath.Join(base, "songs"), filepath.Join(base, "alias")
+	os.MkdirAll(filepath.Join(real, "feed"), 0o755)
+	if err := os.Symlink(real, alias); err != nil {
+		t.Fatal(err)
+	}
+	if !Within(filepath.Join(alias, "feed"), real) || !Within(filepath.Join(alias, "missing", "x"), real) || !Overlap(alias, filepath.Join(real, "feed")) {
+		t.Fatal("a second name of the same folder is not seen")
+	}
+	if Within(filepath.Join(base, "other"), real) {
+		t.Fatal("unrelated folder")
 	}
 }

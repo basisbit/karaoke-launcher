@@ -15,11 +15,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"strings"
 	"time"
 
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
 	"github.com/basisbit/karaoke-launcher/internal/config"
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 )
 
 // Limits of the check (docs/updates.md, rule 1).
@@ -95,12 +95,16 @@ func (u *Updater) platform() string {
 func (u *Updater) Check(ctx context.Context) (*Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, checkTimeout)
 	defer cancel()
+	base, err := url.Parse(u.URL)
+	if err != nil {
+		return nil, err
+	}
 	data, err := get(ctx, u.URL, maxManifest)
 	if err != nil {
 		return nil, err
 	}
-	sum := sha256.Sum256(data)
-	sigURL := u.URL[:strings.LastIndex(u.URL, "/")+1] + "sig/" + hex.EncodeToString(sum[:]) + ".sig"
+	sum := sha256.Sum256(data) // of the exact bytes, also a byte order mark
+	sigURL := base.ResolveReference(&url.URL{Path: "sig/" + hex.EncodeToString(sum[:]) + ".sig"}).String()
 	sig, err := get(ctx, sigURL, maxSignature)
 	if err != nil {
 		return nil, fmt.Errorf("signature: %v", err)
@@ -109,7 +113,7 @@ func (u *Updater) Check(ctx context.Context) (*Result, error) {
 		return nil, errors.New("app.json is not signed with the key in launcher.json")
 	}
 	var m Manifest
-	if err := json.Unmarshal(data, &m); err != nil {
+	if err := json.Unmarshal(bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), &m); err != nil {
 		return nil, fmt.Errorf("app.json: %v", err)
 	}
 	if m.App != 1 {
@@ -141,7 +145,7 @@ func (u *Updater) Check(ctx context.Context) (*Result, error) {
 		if t.ID == config.Launcher && changed && !updatable {
 			res.Notice = true
 		}
-		if !updatable || !(changed || (st == nil && t.ID != config.Launcher && empty(t.Dir))) {
+		if !updatable || !(changed || (st == nil && t.ID != config.Launcher && empty(t.Dir, t.ID))) {
 			continue // a folder with files but no state is not ours; the launcher without state is a developer run
 		}
 		res.Updates = append(res.Updates, Update{Target: t, Version: c.Version, File: f})
@@ -211,7 +215,7 @@ func get(ctx context.Context, addr string, max int64) ([]byte, error) {
 	if err == nil && int64(len(data)) > max {
 		err = fmt.Errorf("%s is larger than %d bytes", req.URL.Redacted(), max)
 	}
-	return bytes.TrimPrefix(data, []byte("\xef\xbb\xbf")), err
+	return data, err
 }
 
 var client = &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -241,8 +245,20 @@ func writable(dir string) bool {
 	return os.Remove(f.Name()) == nil
 }
 
-// empty reports whether dir is missing or has no entries.
-func empty(dir string) bool {
+// empty reports whether dir is missing or holds nothing but what the launcher put there itself: folders it fills
+// with songs or other content (marked with its README.md, for example themes inside the game's folder), the rest
+// of an interrupted first installation (.update-<id>) and empty folders. Such a folder can get the first
+// installation of a component.
+func empty(dir, id string) bool {
 	entries, err := os.ReadDir(dir)
-	return (err != nil && os.IsNotExist(err)) || (err == nil && len(entries) == 0)
+	if err != nil {
+		return os.IsNotExist(err)
+	}
+	for _, e := range entries {
+		p := filepath.Join(dir, e.Name())
+		if !e.IsDir() || !(e.Name() == ".update-"+id || folders.Purpose(p) != "" || empty(p, id)) {
+			return false
+		}
+	}
+	return true
 }

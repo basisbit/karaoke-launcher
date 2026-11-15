@@ -82,5 +82,6 @@
   "update.close.done": "Continua",
   "update.close.later": "Più tardi",
   "update.restart.failed": "L'aggiornamento è installato, ma il launcher non è riuscito a riavviarsi da solo. Avvialo di nuovo.",
+  "update.broken": "Non è stato possibile aggiornare completamente il gioco. Riavvia il launcher per completare l'aggiornamento.",
   "settings.library.bad": "Questa cartella non può essere usata per le canzoni: è già usata per altro, oppure contiene un programma o le cartelle del gioco. Scegli una cartella vuota."
 }

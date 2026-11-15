@@ -170,6 +170,8 @@ func TestUnpackRefused(t *testing.T) {
 		{"file and folder", []member{{name: "a", body: "1"}, {name: "A/"}}, false},
 		{"reserved state name", []member{{name: ".component-game.json", body: "{}"}}, false},
 		{"reserved staging name", []member{{name: ".update-launcher/ready.json", body: "{}"}}, false},
+		{"reserved name upper case", []member{{name: ".COMPONENT-game.json", body: "{}"}}, false},
+		{"reserved staging name mixed case", []member{{name: ".Update-game/ready.json", body: "{}"}}, false},
 		{"control character", []member{{name: "a\nb", body: "x"}}, false},
 		{"too many entries", []member{{name: "1"}, {name: "2"}, {name: "3"}, {name: "4"}, {name: "5"}, {name: "6"}}, false},
 		{"too many bytes", []member{{name: "a", body: strings.Repeat("x", 60)}, {name: "b", body: strings.Repeat("x", 60)}}, false},

@@ -321,6 +321,15 @@ func (l *Library) Pause() {
 	<-done
 }
 
+// Exclusive runs f while no feed is synced, inspected or planned, for example to install a program into a folder
+// that a sync may also write to (themes inside the game's folder). A running sync finishes its current feed first,
+// and the next feed waits until f returns.
+func (l *Library) Exclusive(f func()) {
+	l.engine.Lock()
+	defer l.engine.Unlock()
+	f()
+}
+
 // Status returns the current state.
 func (l *Library) Status() Status {
 	l.mu.Lock()
@@ -346,9 +355,16 @@ func (l *Library) changed() {
 
 // HasSongs reports whether at least one song can be played: a song folder of any feed with a visible txt file.
 func (l *Library) HasSongs() bool {
-	root := l.Root()
+	l.mu.Lock()
+	root, targets := l.root, maps.Clone(l.targets)
+	l.mu.Unlock()
 	feeds, _ := os.ReadDir(root)
 	for _, f := range feeds {
+		dir := filepath.Join(root, f.Name())
+		if strings.HasPrefix(folders.Purpose(dir), folders.Content("")) ||
+			slices.ContainsFunc(slices.Collect(maps.Values(targets)), func(t kfeed.Target) bool { return folders.Within(t.Dir, dir) }) {
+			continue // a folder for themes or other content, not songs
+		}
 		songs, _ := os.ReadDir(filepath.Join(root, f.Name()))
 		for _, s := range songs {
 			if !s.IsDir() || strings.HasPrefix(s.Name(), ".") {

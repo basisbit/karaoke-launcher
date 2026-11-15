@@ -105,10 +105,34 @@ tells the player nothing. Players are never asked to decide about an update they
   can't write to), it shows "A new version is available." with a "Get it" button that opens `updates.page`.
   Without `updates.page` it shows nothing.
 - If a download or an installation fails, the player sees one message, and it is tried again at the next start.
+  When the game's installation stopped half-way, it has old and new files: Play stays disabled until the next start
+  has finished the installation.
+- No song or theme download runs while the game is installed. A theme folder may be inside the game's folder.
 
-A component is installed for the first time only into a folder that is missing or empty. A folder that already has
-files, but was never installed by the launcher, is left alone. The launcher's own folder is updated only when it was
-installed by one of your packages: a launcher that a developer builds and runs is never replaced.
+A component is installed for the first time only into a folder that is missing or empty. Folders the launcher made
+itself count as empty: its song and theme folders (they have its `README.md`) and an interrupted first
+installation. A folder that already has other files, but was never installed by the launcher, is left alone.
+
+### What your packages must contain
+
+The launcher knows what it installed from the file `.component-<component>.json` in the component's folder. Your
+packages (zip, installer) must include it for every program they contain, or the launcher never updates that
+program:
+
+```json
+{
+  "component": "launcher",
+  "version": "1.2.0",
+  "files": ["karaoke-launcher.exe", "launcher.json", "assets/logo.svg"]
+}
+```
+
+- `component`: `launcher`, or the name from `components`. `version`: the version in the package, as in `app.json`.
+- `files`: every file of the package in that folder, with `/`, without the files that match `keep`. Only these
+  files are replaced or deleted by later updates.
+
+Without `.component-launcher.json` the launcher never updates itself and shows no notice: a launcher that a developer
+builds and runs is never replaced. A game folder without its file is updated only when it is empty (see above).
 
 ## How files are replaced
 
@@ -118,13 +142,17 @@ installed by one of your packages: a launcher that a developer builds and runs i
    `nul`, `com1`, …), a name that ends with `.` or a space, a link or special file, two names that differ only in
    upper and lower case, a name that starts with `.component-` or `.update-`, more than 100,000 entries or more than
    16 GiB of data.
-3. The new files are moved into place. A file that can't be replaced because it is in use is renamed to
-   `<name>.old-<number>` first and deleted at the next start.
-4. Files of the old version that the new version doesn't have are deleted. Files the launcher never installed, such
-   as scores and settings the game writes, are never deleted. Neither are files that match `keep`.
+3. Files of the old version that the new version doesn't have are deleted first, so that a file can become a folder
+   and the other way round. Files the launcher never installed, such as scores and settings the game writes, are
+   never deleted. Neither are files that match `keep`. A file that can't be deleted because it is in use is renamed
+   to `<name>.old-<number>` and deleted at the next start; if even that fails, the installation stops.
+4. The new files are moved into place. A file that can't be replaced because it is in use is renamed first, in the
+   same way. A folder is never moved aside to make room for a file: it may hold the player's files.
 5. The list of installed files is saved in `.component-<component>.json` in the component's folder.
 
-If the computer is switched off in the middle, the next start finishes the job.
+If the computer is switched off in the middle, the next start finishes the job. Nothing is written or deleted
+through a link (symbolic link, junction) in the component's folder. On Windows and macOS, `Game.exe` and `game.exe`
+are the same file.
 
 ## Notes
 

@@ -283,3 +283,28 @@ func TestTargetsAndReadmes(t *testing.T) {
 		t.Fatalf("marked folders used for another kind: %v", l.Targets())
 	}
 }
+
+func TestHasSongsNotThemes(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "songs")
+	l, err := Open(filepath.Join(base, "user"), root, []Feed{{ID: "main"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	themes, other := filepath.Join(root, "themes"), filepath.Join(root, "skins")
+	l.SetTargets(map[string]kfeed.Target{"theme": {Dir: themes}})
+	for _, dir := range []string{filepath.Join(themes, "Blue"), filepath.Join(other, "Red")} {
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "readme.txt"), []byte("x"), 0o644)
+	}
+	folders.Mark(other, folders.Content("skin"), "# Skins") // a content folder of an earlier configuration
+	if l.HasSongs() {
+		t.Fatal("a text file of a theme counts as a song")
+	}
+	os.MkdirAll(filepath.Join(root, "main", "Song"), 0o755)
+	os.WriteFile(filepath.Join(root, "main", "Song", "song.txt"), []byte("#TITLE:x"), 0o644)
+	if !l.HasSongs() {
+		t.Fatal("song not seen")
+	}
+}

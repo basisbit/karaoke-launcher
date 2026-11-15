@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 )
 
 const platform = "test-amd64"
@@ -280,5 +281,50 @@ func TestCheckLauncher(t *testing.T) {
 	defer os.Chmod(app, 0o755)
 	if res, err := u.Check(ctx); err != nil || len(res.Updates) != 0 || !res.Notice {
 		t.Fatalf("read-only folder: %q notice %v %v, want a notice", ids(res), res.Notice, err)
+	}
+}
+
+func TestCheckAddressBOMAndFirstInstall(t *testing.T) {
+	s := newSite(t)
+	game := filepath.Join(t.TempDir(), "game")
+	// launcher-made content inside the game's folder and an interrupted first installation don't make it foreign
+	os.MkdirAll(filepath.Join(game, "data", "themes", "Blue"), 0o755)
+	if err := folders.Mark(filepath.Join(game, "data", "themes"), folders.Content("theme"), "# Themes"); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(game, "data", "themes", "Blue", "Blue.ini"), []byte("theme"), 0o644)
+	os.MkdirAll(filepath.Join(stagingDir(game, "game"), "files"), 0o755)
+	os.WriteFile(filepath.Join(stagingDir(game, "game"), "files", "half"), []byte("x"), 0o644)
+	// signed as published: with a byte order mark
+	data, _ := json.Marshal(manifest(1, map[string]Component{"game": comp("1.0", s.archive("g.zip", member{name: "game", body: "g"}))}))
+	data = append([]byte("\xef\xbb\xbf"), data...)
+	os.WriteFile(filepath.Join(s.dir, "app.json"), data, 0o644)
+	sig, _, err := kfeed.Sign(s.key, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(data)
+	os.MkdirAll(filepath.Join(s.dir, "sig"), 0o755)
+	os.WriteFile(filepath.Join(s.dir, "sig", hex.EncodeToString(sum[:])+".sig"), []byte(sig), 0o644)
+
+	u := s.updater(Target{ID: "game", Dir: game})
+	u.URL += "?token=a/b" // a "/" in the query is not a folder
+	res, err := u.Check(context.Background())
+	if err != nil || ids(res) != "game@1.0" {
+		t.Fatalf("check: %v %v", res, err)
+	}
+	if err := u.Stage(context.Background(), res.Updates[0], nil); err != nil {
+		t.Fatal(err)
+	}
+	apply(t, game, "game", nil)
+	if got := tree(t, game); got["game"] != "g" || got["data/themes/Blue/Blue.ini"] != "theme" || got["half"] != "" {
+		t.Fatalf("game folder: %v", got)
+	}
+
+	os.RemoveAll(game)
+	os.MkdirAll(filepath.Join(game, "data"), 0o755)
+	os.WriteFile(filepath.Join(game, "data", "own.txt"), []byte("x"), 0o644)
+	if res, err := u.Check(context.Background()); err != nil || len(res.Updates) != 0 {
+		t.Fatalf("folder with a foreign file: %v %v", ids(res), err)
 	}
 }

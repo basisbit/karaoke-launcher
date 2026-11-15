@@ -158,7 +158,7 @@ func (h *home) refresh(s library.Status) {
 		h.root.Refresh() // lay out the whole screen again: the progress bar takes its place
 	}
 	switch {
-	case a.gameRunning || a.updating:
+	case a.gameRunning || a.updating || a.updBroken:
 		h.play.Disable()
 	case a.o.Library.HasSongs():
 		h.play.SetText(a.tr.T("home.play"))

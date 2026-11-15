@@ -82,5 +82,6 @@
   "update.close.done": "Doorgaan",
   "update.close.later": "Later",
   "update.restart.failed": "De update is geïnstalleerd, maar de launcher kon zichzelf niet opnieuw starten. Start hem opnieuw.",
+  "update.broken": "Het spel kon niet volledig worden bijgewerkt. Start de launcher opnieuw om de update af te maken.",
   "settings.library.bad": "Deze map kan niet voor nummers worden gebruikt: hij wordt al voor iets anders gebruikt, of hij bevat een programma of de mappen van het spel. Kies een lege map."
 }

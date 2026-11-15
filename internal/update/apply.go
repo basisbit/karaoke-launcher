@@ -8,7 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +16,35 @@ import (
 
 // rename is os.Rename; a test replaces it to make a target that can't be replaced.
 var rename = os.Rename
+
+// foldCase is true where the file system usually ignores upper and lower case (a test sets it).
+var foldCase = runtime.GOOS == "windows" || runtime.GOOS == "darwin"
+
+// pathKey is how two paths of a component are compared: "Game.exe" and "game.exe" are one file where case is
+// ignored.
+func pathKey(rel string) string {
+	if foldCase {
+		return strings.ToLower(rel)
+	}
+	return rel
+}
+
+// linkFree reports whether no part of rel below dir is a symbolic link or a junction, so that a file written or
+// deleted there stays inside dir. Parts that don't exist yet are fine.
+func linkFree(dir, rel string) bool {
+	cur := dir
+	for _, part := range strings.Split(rel, "/") {
+		cur = filepath.Join(cur, part)
+		fi, err := os.Lstat(cur)
+		if err != nil {
+			return true
+		}
+		if fi.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // Keep reports whether rel (with "/") matches one of the keep patterns, as a whole path or by its file name.
 func Keep(keep []string, rel string) bool {
@@ -37,8 +66,8 @@ func Pending(dir, id string) bool {
 }
 
 // Apply installs the unpacked update of a component (no network). It does nothing and returns false when there is
-// none. When it is interrupted, the next call completes it. Files the launcher never wrote are never deleted, and
-// files that match keep are never overwritten.
+// none. When it is interrupted or fails, the next call completes it. Files the launcher never wrote are never
+// deleted, files that match keep are never overwritten, and nothing is written or deleted through a link.
 func Apply(dir, id string, keep []string) (bool, error) {
 	var r ready
 	if err := readJSON(readyPath(dir, id), &r); err != nil {
@@ -52,11 +81,30 @@ func Apply(dir, id string, keep []string) (bool, error) {
 		return false, err
 	}
 	staged := filepath.Join(stagingDir(dir, id), "files")
-	var list []string
+	have := make(map[string]bool, len(r.Files))
 	for _, rel := range r.Files {
 		if !safeRel(rel) {
 			return false, fmt.Errorf("update of %s lists the unsafe path %q", id, rel)
 		}
+		if !linkFree(dir, rel) {
+			return false, fmt.Errorf("update of %s: %s goes through a link in %s", id, rel, dir)
+		}
+		have[pathKey(rel)] = true
+	}
+	// Files of the old version that the new one doesn't have go first, so that a file of the old version can become
+	// a folder of the new one and the other way round.
+	if old != nil {
+		for _, rel := range old.Files {
+			if !safeRel(rel) || have[pathKey(rel)] || Keep(keep, rel) || !linkFree(dir, rel) {
+				continue
+			}
+			if err := removeOld(dir, rel); err != nil {
+				return false, fmt.Errorf("update of %s: can't remove the old file %s: %w", id, rel, err)
+			}
+		}
+	}
+	var list []string
+	for _, rel := range r.Files {
 		src, target := filepath.Join(staged, filepath.FromSlash(rel)), filepath.Join(dir, filepath.FromSlash(rel))
 		_, terr := os.Lstat(target)
 		if Keep(keep, rel) {
@@ -77,29 +125,43 @@ func Apply(dir, id string, keep []string) (bool, error) {
 			return false, err
 		}
 	}
-	if old != nil {
-		for _, rel := range old.Files {
-			if !safeRel(rel) || slices.Contains(list, rel) || Keep(keep, rel) {
-				continue
-			}
-			target := filepath.Join(dir, filepath.FromSlash(rel))
-			if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
-				moveAside(dir, rel) // a running program: deleted by Cleanup at the next start
-			}
-			removeEmptyParents(dir, rel)
-		}
-	}
 	if err := WriteState(dir, State{Component: id, Version: r.Version, Files: list}); err != nil {
 		return false, err
 	}
 	return true, os.RemoveAll(stagingDir(dir, id))
 }
 
-// replace moves src to target. A target that can't be replaced (a running program on Windows) is renamed first.
+// removeOld deletes a file of the old version. One that can't be deleted (a running program on Windows) is renamed
+// and deleted by Cleanup at the next start. A folder at its place now is not the launcher's and stays.
+func removeOld(dir, rel string) error {
+	target := filepath.Join(dir, filepath.FromSlash(rel))
+	fi, err := os.Lstat(target)
+	switch {
+	case errors.Is(err, fs.ErrNotExist): // removed by an interrupted run, or by the user
+	case err != nil:
+		return err
+	case fi.IsDir():
+		return nil
+	default:
+		if err := os.Remove(target); err != nil {
+			if merr := moveAside(dir, rel); merr != nil {
+				return errors.Join(err, merr)
+			}
+		}
+	}
+	removeEmptyParents(dir, rel)
+	return nil
+}
+
+// replace moves src to target. A file that can't be replaced (a running program on Windows) is renamed first; a
+// folder is never moved aside, because it may hold files that are not the launcher's.
 func replace(dir, rel, src, target string, exists bool) error {
 	err := rename(src, target)
 	if err == nil || !exists {
 		return err
+	}
+	if fi, serr := os.Lstat(target); serr == nil && fi.IsDir() {
+		return fmt.Errorf("%s is a folder and can't be replaced with a file: %w", rel, err)
 	}
 	if merr := moveAside(dir, rel); merr != nil {
 		return errors.Join(err, merr)
@@ -146,7 +208,7 @@ func Cleanup(dir string) error {
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		rel := strings.TrimSpace(sc.Text())
-		if !safeRel(rel) || !strings.Contains(path.Base(rel), ".old-") {
+		if !safeRel(rel) || !strings.Contains(path.Base(rel), ".old-") || !linkFree(dir, rel) {
 			continue
 		}
 		if err := os.Remove(filepath.Join(dir, filepath.FromSlash(rel))); err != nil && !errors.Is(err, fs.ErrNotExist) {

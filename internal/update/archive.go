@@ -145,7 +145,8 @@ func (u *unpacker) add(e entry) error {
 		return nil // a folder that strip removes
 	}
 	rel := strings.Join(parts[u.strip:], "/")
-	if first := parts[u.strip]; strings.HasPrefix(first, ".component-") || strings.HasPrefix(first, ".update-") {
+	// upper and lower case are the same on Windows and macOS, where .COMPONENT-game.json would replace the state
+	if first := strings.ToLower(parts[u.strip]); strings.HasPrefix(first, ".component-") || strings.HasPrefix(first, ".update-") {
 		return fmt.Errorf("%q uses a name the launcher keeps for itself", e.name)
 	}
 	target := filepath.Join(u.dest, filepath.FromSlash(rel))

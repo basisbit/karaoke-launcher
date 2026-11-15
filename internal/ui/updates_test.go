@@ -19,6 +19,7 @@ import (
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
 
 	"github.com/basisbit/karaoke-launcher/internal/config"
+	"github.com/basisbit/karaoke-launcher/internal/settings"
 	"github.com/basisbit/karaoke-launcher/internal/update"
 )
 
@@ -215,5 +216,47 @@ func TestUpdateNotice(t *testing.T) {
 		if tc.lang == "en" {
 			shot(t, a, "m5-home-update-notice")
 		}
+	}
+}
+
+func TestUpdateGameBroken(t *testing.T) {
+	u := updateSite(t, map[string]string{"game": "2.0"}, map[string]map[string]string{"game": {"game.bin": "game 2.0", "data.bin": "d"}}, "test-x", nil)
+	game := filepath.Join(t.TempDir(), "game")
+	// version 1 is installed, and the user put a folder where version 2 has a file: installing can't finish
+	os.MkdirAll(filepath.Join(game, "game.bin"), 0o755)
+	os.WriteFile(filepath.Join(game, "game.bin", "mine.txt"), []byte("mine"), 0o644)
+	update.WriteState(game, update.State{Component: "game", Version: "1.0"})
+	u.Targets = []update.Target{{ID: "game", Dir: game}}
+	a := updateApp(t, "en", u)
+	a.o.Running = func(string) ([]string, bool) { return nil, true }
+	done := make(chan struct{})
+	go func() { a.runUpdates(); close(done) }()
+	eventually(t, a, "question", func() bool { return a.closeAsk != nil })
+	onUI(a, func() { a.closeAsk.Confirm() })
+	<-done
+	onUI(a, func() {
+		if !a.home.play.Disabled() || !a.home.updRow.Visible() || a.home.updText.Text != a.tr.T("update.broken") {
+			t.Errorf("after a failed install: Play disabled %v, line %q", a.home.play.Disabled(), a.home.updText.Text)
+		}
+	})
+	if !update.Pending(game, "game") {
+		t.Fatal("the update is not tried again at the next start")
+	}
+	if data, _ := os.ReadFile(filepath.Join(game, "game.bin", "mine.txt")); string(data) != "mine" {
+		t.Fatal("user file changed")
+	}
+}
+
+func TestLibraryFeedsTrusted(t *testing.T) {
+	cfg := &config.Config{Feeds: []config.Feed{{ID: "main", Address: "https://example.org/", Key: "ed25519:x"}, {ID: "plain", Address: "https://example.org/b/"}}}
+	set := &settings.Settings{Feeds: []settings.Feed{{Address: "https://other.example/", Key: "ed25519:y"}}}
+	got := LibraryFeeds(cfg, set)
+	if len(got) != 2 || !got[0].Trusted || got[1].Trusted {
+		t.Fatalf("feeds without other feeds allowed: %+v", got)
+	}
+	cfg.AllowOtherFeeds = true
+	got = LibraryFeeds(cfg, set)
+	if len(got) != 3 || !got[0].Trusted || got[2].Trusted {
+		t.Fatalf("an added feed with a key is never trusted: %+v", got)
 	}
 }

@@ -82,5 +82,6 @@
   "update.close.done": "Continuar",
   "update.close.later": "Mais tarde",
   "update.restart.failed": "A atualização está instalada, mas o launcher não conseguiu reiniciar-se sozinho. Abre-o de novo.",
+  "update.broken": "Não foi possível atualizar o jogo por completo. Reinicia o launcher para terminar a atualização.",
   "settings.library.bad": "Esta pasta não pode ser usada para músicas: já é usada para outra coisa, ou contém um programa ou as pastas do jogo. Escolhe uma pasta vazia."
 }

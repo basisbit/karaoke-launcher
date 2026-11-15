@@ -34,6 +34,11 @@ func (u *Updater) Stage(ctx context.Context, up Update, progress func(done, tota
 		return err
 	}
 	staging := stagingDir(up.Dir, up.ID)
+	// An older staged version goes first, with its ready.json: an interruption must not leave its file list next to
+	// files of this version.
+	if err := os.RemoveAll(staging); err != nil {
+		return err
+	}
 	files, err := Unpack(archive, filepath.Join(staging, "files"), up.File.Strip)
 	if err != nil {
 		os.RemoveAll(staging)
