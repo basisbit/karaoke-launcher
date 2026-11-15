@@ -24,6 +24,9 @@ type home struct {
 	news     *widget.Label
 	newsBox  *fyne.Container
 	bottom   *fyne.Container
+	updRow   *fyne.Container // program update: text and an optional button
+	updText  *widget.Label
+	updBtn   *widget.Button
 }
 
 func newHome(a *App) *home {
@@ -78,7 +81,16 @@ func newHome(a *App) *home {
 	h.details.Importance = widget.LowImportance
 	h.details.Hide()
 	h.progress.Hide()
-	h.bottom = container.NewVBox(h.progress, h.status, container.NewCenter(h.details),
+	h.updText = widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{})
+	h.updText.Wrapping = fyne.TextWrapWord
+	h.updBtn = widget.NewButtonWithIcon("", theme.ViewRefreshIcon(), func() {
+		if f := a.updLine.action; f != nil {
+			f()
+		}
+	})
+	h.updRow = container.NewVBox(h.updText, container.NewCenter(h.updBtn))
+	h.showUpdate()
+	h.bottom = container.NewVBox(h.updRow, h.progress, h.status, container.NewCenter(h.details),
 		container.NewCenter(container.NewGridWrap(fyne.NewSize(320, 72), h.play)), h.hint)
 	column := container.NewVBox(layout.NewSpacer(), logo, title, h.newsBox, layout.NewSpacer(), h.bottom, layout.NewSpacer())
 
@@ -110,6 +122,25 @@ func (h *home) setNews(text string) {
 	}
 }
 
+// showUpdate shows the update row as App.updLine says; it is hidden when there is nothing to say.
+func (h *home) showUpdate() {
+	l := h.a.updLine
+	h.updText.SetText(h.a.tr.T(l.text))
+	if l.button != "" {
+		h.updBtn.SetText(h.a.tr.T(l.button))
+		icon := theme.ViewRefreshIcon() // restart
+		if l.button == "update.get" {
+			icon = theme.DownloadIcon() // opens the page with the new version
+		}
+		h.updBtn.SetIcon(icon)
+	}
+	btn := setVisible(h.updBtn, l.button != "")
+	row := setVisible(h.updRow, l.text != "")
+	if (btn || row) && h.root != nil { // nil while the screen is built
+		h.root.Refresh()
+	}
+}
+
 // refresh shows the library status. Play works as soon as one song is there; before that it leads to the songs.
 func (h *home) refresh(s library.Status) {
 	a := h.a
@@ -127,7 +158,7 @@ func (h *home) refresh(s library.Status) {
 		h.root.Refresh() // lay out the whole screen again: the progress bar takes its place
 	}
 	switch {
-	case a.gameRunning:
+	case a.gameRunning || a.updating:
 		h.play.Disable()
 	case a.o.Library.HasSongs():
 		h.play.SetText(a.tr.T("home.play"))

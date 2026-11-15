@@ -44,7 +44,8 @@ type feedView struct {
 	info   *kfeed.Info
 	err    error
 	checks map[string]*widget.Check
-	chosen map[string]bool // packs that are in the library now
+	chosen map[string]bool   // packs that are in the library now
+	kinds  map[string]string // pack id -> kind ("songs", "theme", …)
 }
 
 func (a *App) showSongs() {
@@ -112,7 +113,7 @@ func (s *songs) build() {
 	a, tr := s.a, s.a.tr
 	s.list.RemoveAll()
 	for _, fv := range s.feeds {
-		fv.checks, fv.chosen = map[string]*widget.Check{}, map[string]bool{}
+		fv.checks, fv.chosen, fv.kinds = map[string]*widget.Check{}, map[string]bool{}, map[string]string{}
 		if fv.err != nil {
 			key := "error.generic"
 			if isOffline(fv.err) {
@@ -134,8 +135,7 @@ func (s *songs) build() {
 		s.list.Add(name)
 		s.list.Add(meta)
 		never := !info.Subscribed // starter packs only for a feed that was never chosen, not after "remove all"
-		for _, p := range info.Packs {
-			fv.chosen[p.ID] = p.Chosen
+		addPack := func(p kfeed.Pack, size string) {
 			c := widget.NewCheck(pick(p.Names, tr.Code()), nil)
 			if c.Text == "" {
 				c.Text = p.ID
@@ -144,11 +144,43 @@ func (s *songs) build() {
 			id, view := p.ID, fv
 			c.OnChanged = func(on bool) { s.toggled(view, id, on) }
 			fv.checks[p.ID] = c
-			size := widget.NewLabel(tr.T("songs.pack", "songs", strconv.Itoa(p.Songs), "size", humanBytes(p.Bytes)))
-			s.list.Add(container.NewBorder(nil, nil, nil, size, c))
+			s.list.Add(container.NewBorder(nil, nil, nil, widget.NewLabel(size), c))
+		}
+		for _, p := range info.Packs {
+			fv.chosen[p.ID], fv.kinds[p.ID] = p.Chosen, p.Kind
+			if p.Kind == kfeed.KindSongs {
+				addPack(p, tr.T("songs.pack", "songs", strconv.Itoa(p.Songs), "size", humanBytes(p.Bytes)))
+			}
+		}
+		// other kinds (themes, …): only from a feed of launcher.json with a key, and only with a folder on this system
+		if fv.feed.Trusted {
+			targets := a.o.Library.Targets() // folders that can be used now
+			for _, kind := range sortedKinds(info.Packs) {
+				if _, ok := targets[kind]; !ok {
+					continue
+				}
+				head := widget.NewLabelWithStyle(a.o.Config.Content[kind].Label.Get(tr.Code()), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+				s.list.Add(head)
+				for _, p := range info.Packs {
+					if p.Kind == kind {
+						addPack(p, humanBytes(p.Bytes))
+					}
+				}
+			}
 		}
 		s.list.Add(widget.NewSeparator())
 	}
+}
+
+// sortedKinds returns the pack kinds other than songs, in the order they first appear.
+func sortedKinds(packs []kfeed.Pack) []string {
+	var kinds []string
+	for _, p := range packs {
+		if p.Kind != kfeed.KindSongs && !slices.Contains(kinds, p.Kind) {
+			kinds = append(kinds, p.Kind)
+		}
+	}
+	return kinds
 }
 
 // toggled asks before songs that are in the library are removed; the removal starts right away.
@@ -159,7 +191,11 @@ func (s *songs) toggled(fv *feedView, id string, on bool) {
 		return
 	}
 	c := fv.checks[id]
-	d := dialog.NewConfirm(tr.T("songs.remove.title"), tr.T("songs.remove.text", "pack", c.Text), func(yes bool) {
+	title, text := tr.T("songs.remove.title"), tr.T("songs.remove.text", "pack", c.Text)
+	if fv.kinds[id] != kfeed.KindSongs { // themes and other kinds: the texts must not speak of songs
+		title, text = tr.T("songs.remove.other.title"), tr.T("songs.remove.other", "pack", c.Text)
+	}
+	d := dialog.NewConfirm(title, text, func(yes bool) {
 		if !yes {
 			c.OnChanged = nil
 			c.SetChecked(true)
@@ -182,7 +218,8 @@ func (s *songs) choices() map[string]library.Choice {
 		}
 		packs := []string{}
 		for _, p := range fv.info.Packs {
-			if fv.checks[p.ID].Checked {
+			c := fv.checks[p.ID]
+			if (c != nil && c.Checked) || (c == nil && p.Chosen) { // a pack not shown keeps its choice
 				packs = append(packs, p.ID)
 			}
 		}

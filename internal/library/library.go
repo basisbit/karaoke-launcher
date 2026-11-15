@@ -16,6 +16,8 @@ import (
 	"sync"
 
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
+
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 )
 
 // ErrRunning means another launcher instance uses the same per-user data folder.
@@ -30,6 +32,9 @@ type Feed struct {
 	Address string
 	Key     string
 	Starter []string // packs ticked on first run
+	// Trusted is true for a feed from launcher.json that has a key: only such a feed may install packs of other
+	// kinds (themes), and only into the folders SetTargets gives (SPEC 5.6).
+	Trusted bool
 }
 
 // AddedID returns the folder id for a feed the user added.
@@ -63,7 +68,9 @@ type Library struct {
 	feeds    []Feed
 	unlock   func()
 	onChange func(Status)
-	seeds    []string // folders with songs the user has already (guarded by mu)
+	seeds    []string                // folders with songs the user has already (guarded by mu)
+	targets  map[string]kfeed.Target // kind -> folder for packs of other kinds (trusted feeds only)
+	readmes  map[string]string       // purpose (folders.Songs, folders.Content(kind)) -> text of its README.md
 
 	engine sync.Mutex // the engine locks a feed folder: one engine call at a time
 
@@ -102,7 +109,13 @@ func (l *Library) SetOnChange(f func(Status)) {
 // Close stops a running download and releases the lock.
 func (l *Library) Close() {
 	l.Pause()
-	l.unlock()
+	l.mu.Lock()
+	unlock := l.unlock
+	l.unlock = nil
+	l.mu.Unlock()
+	if unlock != nil { // a second Close (restart after an update, then the deferred one) does nothing
+		unlock()
+	}
 }
 
 // Root returns the library folder.
@@ -157,8 +170,61 @@ func (l *Library) options(f Feed, c Choice) kfeed.Options {
 	l.mu.Lock()
 	seeds := slices.Clone(l.seeds)
 	l.mu.Unlock()
-	return kfeed.Options{Address: f.Address, Key: f.Key, Library: l.Dir(f.ID), Packs: c.Packs, Exclude: c.Exclude,
+	o := kfeed.Options{Address: f.Address, Key: f.Key, Library: l.Dir(f.ID), Packs: c.Packs, Exclude: c.Exclude,
 		Seeds: seeds}
+	if f.Trusted && f.Key != "" {
+		o.Targets = l.Targets()
+	}
+	return o
+}
+
+// Targets returns the folders for packs of other kinds that can be used now. A folder that is the song folder, holds
+// it, overlaps the folder of a feed, or is marked for something else is left out (with its kind).
+func (l *Library) Targets() map[string]kfeed.Target {
+	l.mu.Lock()
+	root, feeds, targets := l.root, slices.Clone(l.feeds), maps.Clone(l.targets)
+	l.mu.Unlock()
+	for kind, t := range targets {
+		p := folders.Purpose(t.Dir)
+		bad := folders.Within(root, t.Dir) || (p != "" && p != folders.Content(kind)) ||
+			slices.ContainsFunc(feeds, func(f Feed) bool { return folders.Overlap(t.Dir, filepath.Join(root, f.ID)) })
+		if bad {
+			delete(targets, kind)
+		}
+	}
+	return targets
+}
+
+// SetReadmes sets the texts of the README.md files in the folders the library fills (purpose -> text) and writes
+// them into the folders that exist. Later syncs write them into new folders.
+func (l *Library) SetReadmes(texts map[string]string) {
+	l.mu.Lock()
+	l.readmes = maps.Clone(texts)
+	l.mu.Unlock()
+	l.mark()
+}
+
+// mark writes the README.md files into the song folder and the content folders that exist. A folder marked for
+// something else is left alone (Targets leaves such a content folder out).
+func (l *Library) mark() {
+	l.mu.Lock()
+	root, texts := l.root, maps.Clone(l.readmes)
+	l.mu.Unlock()
+	if text := texts[folders.Songs]; text != "" {
+		folders.Mark(root, folders.Songs, text)
+	}
+	for kind, t := range l.Targets() {
+		if text := texts[folders.Content(kind)]; text != "" {
+			folders.Mark(t.Dir, folders.Content(kind), text)
+		}
+	}
+}
+
+// SetTargets sets where packs of other kinds go (kind -> folder and allowed file types). Only trusted feeds use it.
+func (l *Library) SetTargets(t map[string]kfeed.Target) {
+	l.mu.Lock()
+	l.targets = maps.Clone(t)
+	l.mu.Unlock()
 }
 
 // SetSeeds sets the folders with songs the user has already: files with the same content are taken from there
@@ -237,6 +303,7 @@ func (l *Library) Start(choices map[string]Choice) error {
 				break
 			}
 		}
+		l.mark() // new folders tell what they are for
 		l.update(func(s *Status) { s.Running, s.Paused = false, ctx.Err() != nil })
 	}()
 	return nil

@@ -2,7 +2,7 @@ module github.com/basisbit/karaoke-launcher
 
 go 1.25.0
 
-require github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115022656-8a011db90640
+require github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115120226-d49822d38264
 
 require (
 	fyne.io/systray v1.12.3-0.20260810170012-af4e8e793ec4 // indirect
@@ -41,6 +41,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.45.0
 	golang.org/x/text v0.38.0 // indirect
 )

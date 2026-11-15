@@ -14,6 +14,9 @@ import (
 	"time"
 
 	kfeed "github.com/basisbit/karaoke-feeds/tool"
+
+	"github.com/basisbit/karaoke-launcher/internal/folders"
+	"github.com/basisbit/karaoke-launcher/internal/testfeed"
 )
 
 const meta = `{"licenses": {"*": {"spdx": "CC-BY-4.0", "attribution": "Test Artist", "source": "https://example.org/src"}}}`
@@ -205,5 +208,78 @@ func TestSeeds(t *testing.T) {
 	r := s.Results["main"]
 	if s.Err != nil || r == nil || len(r.Added) != 2 || r.BytesImported == 0 || r.BytesDownloaded != 0 || !l.HasSongs() {
 		t.Fatalf("status %+v, result %+v", s, r)
+	}
+}
+
+func TestThemes(t *testing.T) {
+	f := testfeed.Signed(t)
+	themes := filepath.Join(t.TempDir(), "themes")
+	targets := map[string]kfeed.Target{"theme": {Dir: themes, Extensions: []string{".ini", ".png"}}}
+	for _, tc := range []struct {
+		name    string
+		trusted bool
+	}{{"trusted", true}, {"added by the user", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			os.RemoveAll(themes)
+			userdata, root := t.TempDir(), filepath.Join(t.TempDir(), "library")
+			l, err := Open(userdata, root, []Feed{{ID: "main", Address: f.Pub, Key: f.Key, Trusted: tc.trusted}}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer l.Close()
+			l.SetTargets(targets)
+			if err := l.Start(map[string]Choice{"main": {Packs: []string{"pop", "themes"}}}); err != nil {
+				t.Fatal(err)
+			}
+			s := waitIdle(t, l)
+			if s.Err != nil {
+				t.Fatal(s.Err)
+			}
+			if !l.HasSongs() {
+				t.Fatal("songs missing")
+			}
+			_, err = os.Stat(filepath.Join(themes, "Blue", "bg.png"))
+			if got := err == nil; got != tc.trusted {
+				t.Fatalf("theme files there: %v, want %v", got, tc.trusted)
+			}
+		})
+	}
+}
+
+func TestTargetsAndReadmes(t *testing.T) {
+	base := t.TempDir()
+	root, themes := filepath.Join(base, "songs"), filepath.Join(base, "themes")
+	l, err := Open(filepath.Join(base, "user"), root, []Feed{{ID: "main"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	for dir, ok := range map[string]bool{root: false, base: false, filepath.Join(root, "main", "t"): false,
+		filepath.Join(root, "themes"): true, themes: true} {
+		l.SetTargets(map[string]kfeed.Target{"theme": {Dir: dir}})
+		if _, got := l.Targets()["theme"]; got != ok {
+			t.Errorf("target %s usable: %v, want %v", dir, got, ok)
+		}
+	}
+
+	// README.md files go into the folders that exist; a folder marked for songs is no theme folder
+	l.SetTargets(map[string]kfeed.Target{"theme": {Dir: themes}})
+	os.MkdirAll(themes, 0o755)
+	texts := map[string]string{folders.Songs: "# Songs", folders.Content("theme"): "# Themes"}
+	l.SetReadmes(texts)
+	if folders.Purpose(themes) != folders.Content("theme") {
+		t.Fatal("theme folder not marked")
+	}
+	if _, err := os.Stat(root); err == nil {
+		t.Fatal("song folder created just for its README.md")
+	}
+	os.MkdirAll(root, 0o755)
+	l.SetReadmes(texts)
+	if folders.Purpose(root) != folders.Songs {
+		t.Fatal("song folder not marked")
+	}
+	l.SetTargets(map[string]kfeed.Target{"theme": {Dir: root}, "skin": {Dir: themes}})
+	if len(l.Targets()) != 0 {
+		t.Fatalf("marked folders used for another kind: %v", l.Targets())
 	}
 }

@@ -3,6 +3,7 @@ package ui
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 	"github.com/basisbit/karaoke-launcher/internal/library"
 	"github.com/basisbit/karaoke-launcher/internal/settings"
 )
@@ -141,5 +143,41 @@ func TestImportFolders(t *testing.T) {
 	onUI(a, func() { button(a.win.Content(), "Remove").OnTapped() })
 	if s2, _ := settings.Load(a.o.UserData, ""); len(s2.Import) != 0 || len(a.o.Settings.Import) != 0 {
 		t.Fatalf("import folder not removed: %v", s2.Import)
+	}
+}
+
+func TestSongFolderChoice(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	a := testApp(t, filepath.Join("..", "..", "examples", "dark", "launcher.json"), "en")
+	a.o.AppDir = filepath.Join(t.TempDir(), "app")
+	a.o.GOOS = "linux" // the example's theme folder on Linux is {home}/.karaoke-game/themes
+	base := t.TempDir()
+	marked := func(name, purpose string) string {
+		d := filepath.Join(base, name)
+		os.MkdirAll(d, 0o755)
+		folders.Mark(d, purpose, "# x")
+		return d
+	}
+	songs := marked("songs", folders.Songs)
+	program := filepath.Join(base, "program")
+	os.MkdirAll(program, 0o755)
+	os.WriteFile(filepath.Join(program, ".component-game.json"), []byte("{}"), 0o644)
+	for dir, ok := range map[string]bool{
+		filepath.Join(base, "new"): true,
+		songs:                      true, // the song folder used before
+		marked("themes", folders.Content("theme")): false,
+		filepath.Join(songs, "main"):               false, // inside another song folder
+		program:                                    false,
+		a.o.AppDir:                                 false,
+		filepath.Dir(a.o.AppDir):                   false,
+		filepath.Join(a.o.AppDir, "songs"):         true,  // a portable installation
+		home:                                       false, // holds the theme folder
+		filepath.Join(home, ".karaoke-game", "themes"): false,
+	} {
+		if got := a.songFolderOK(dir); got != ok {
+			t.Errorf("songFolderOK(%s) = %v, want %v", dir, got, ok)
+		}
 	}
 }

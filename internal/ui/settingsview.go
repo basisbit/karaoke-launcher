@@ -18,6 +18,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/basisbit/karaoke-launcher/internal/config"
+	"github.com/basisbit/karaoke-launcher/internal/folders"
 	"github.com/basisbit/karaoke-launcher/internal/library"
 	"github.com/basisbit/karaoke-launcher/internal/settings"
 )
@@ -52,11 +53,17 @@ func (a *App) showSettings() {
 			if err != nil || u == nil {
 				return
 			}
+			if !a.songFolderOK(u.Path()) {
+				dialog.ShowInformation(tr.T("settings.library.change"), tr.T("settings.library.bad"), a.win)
+				return
+			}
 			if err := a.o.Library.SetRoot(u.Path()); err != nil {
 				a.showError("error.generic", err)
 				return
 			}
 			set.Library = u.Path()
+			a.o.Library.SetTargets(a.o.Config.Targets(a.o.GOOS, a.vars())) // folders given as {library}/… move along
+			a.setReadmes()
 			if a.save() {
 				folder.SetText(set.Library)
 				note.SetText(tr.T("settings.library.new"))
@@ -93,6 +100,7 @@ func (a *App) showSettings() {
 		set.Language = code
 		if a.save() {
 			a.tr = NewTranslator(code)
+			a.setReadmes()
 			a.showSettings() // all texts in the new language
 		}
 	}
@@ -374,4 +382,40 @@ func (a *App) showAbout() {
 	back := widget.NewButtonWithIcon(tr.T("button.back"), theme.NavigateBackIcon(), a.showSettings)
 	a.setContent(container.NewPadded(container.NewBorder(
 		container.NewVBox(container.NewBorder(nil, nil, nil, back, title), head), nil, nil, nil, licences)))
+}
+
+// songFolderOK reports whether dir can be the song folder. It can't be a folder the launcher fills with something
+// else (marked by its README.md), be inside such a folder or inside another song folder, be or hold the folder of
+// the launcher or of a program it installs, or be, hold or be inside a folder for themes and other content (except
+// such folders inside the song folder, which move along with it).
+func (a *App) songFolderOK(dir string) bool {
+	if p := folders.Purpose(dir); p != "" && p != folders.Songs {
+		return false
+	}
+	if folders.MarkedParent(dir) != "" {
+		return false
+	}
+	if m, _ := filepath.Glob(filepath.Join(dir, ".component-*.json")); len(m) > 0 {
+		return false // a program folder
+	}
+	v := a.vars()
+	v.Library = dir
+	busy := []string{a.o.AppDir}
+	for id := range a.o.Config.Components {
+		if d, ok, err := a.o.Config.ComponentDir(id, a.o.GOOS, v); ok && err == nil {
+			busy = append(busy, d)
+		}
+	}
+	for _, d := range busy {
+		if folders.Within(d, dir) {
+			return false
+		}
+	}
+	for kind := range a.o.Config.Content {
+		d, ok, err := a.o.Config.ContentDir(kind, a.o.GOOS, v)
+		if ok && err == nil && !a.o.Config.ContentInLibrary(kind, a.o.GOOS) && folders.Overlap(d, dir) {
+			return false
+		}
+	}
+	return true
 }
