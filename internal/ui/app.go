@@ -49,8 +49,9 @@ type App struct {
 	tr  *Translator
 	th  *Theme
 
-	home  *home  // the screen on show, or nil
-	songs *songs // the screen on show, or nil
+	home       *home  // the screen on show, or nil
+	songs      *songs // the screen on show, or nil
+	settingsOn bool   // the settings screen is on show
 
 	infoMu sync.Mutex
 	infos  map[string]*kfeed.Info // last description of each feed

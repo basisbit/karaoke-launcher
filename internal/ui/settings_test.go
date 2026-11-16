@@ -7,12 +7,16 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
+	kfeed "github.com/basisbit/karaoke-feeds/tool"
+
+	"github.com/basisbit/karaoke-launcher/internal/config"
 	"github.com/basisbit/karaoke-launcher/internal/folders"
 	"github.com/basisbit/karaoke-launcher/internal/library"
 	"github.com/basisbit/karaoke-launcher/internal/settings"
@@ -96,7 +100,8 @@ func TestSettingsScreen(t *testing.T) {
 	onUI(a, func() { button(a.win.Canvas().Overlays().Top(), "Remove").OnTapped() })
 	eventually(t, a, "source removed", func() bool { return len(a.o.Settings.Feeds) == 0 && !hasAdded() })
 
-	// language: German texts everywhere, saved
+	// language: German texts everywhere (also the window title), saved
+	a.o.Config.Name = config.Text{"en": "Sing", "de": "Singen"}
 	onUI(a, func() {
 		s, _ := find(a.win.Content(), func(s *widget.Select) bool { return true })
 		s.SetSelected("Deutsch")
@@ -104,6 +109,9 @@ func TestSettingsScreen(t *testing.T) {
 	onUI(a, func() {
 		if button(a.win.Content(), "Zurück") == nil {
 			t.Error("no German texts after choosing Deutsch")
+		}
+		if a.win.Title() != "Singen" {
+			t.Errorf("window title %q after choosing Deutsch", a.win.Title())
 		}
 	})
 	if s2, _ := settings.Load(a.o.UserData, ""); s2.Language != "de" {
@@ -180,4 +188,70 @@ func TestSongFolderChoice(t *testing.T) {
 			t.Errorf("songFolderOK(%s) = %v, want %v", dir, got, ok)
 		}
 	}
+}
+
+// TestExcludeDuringDownload: a licence filter chosen while a download runs is applied (the download is paused for
+// it and continues with the filter), not dropped.
+func TestExcludeDuringDownload(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a"}, "Rock": {"c"}})
+	nd := `{"licenses": {"*": {"spdx": "CC-BY-ND-4.0", "attribution": "Test Artist", "source": "https://example.org/src"}}}`
+	src := filepath.Dir(pub)
+	os.WriteFile(filepath.Join(src, "songs", "Pop", "a", "feed-meta.json"), []byte(nd), 0o644)
+	old := os.Stdout
+	os.Stdout, _ = os.Open(os.DevNull)
+	code := kfeed.Run([]string{"kfeed", "build", src}, "test")
+	os.Stdout.Close()
+	os.Stdout = old
+	if code != 0 {
+		t.Fatal("kfeed build failed")
+	}
+	var stall atomic.Bool
+	files := http.FileServer(http.Dir(pub))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if stall.Load() && strings.HasPrefix(r.URL.Path, "/blobs/") {
+			w.WriteHeader(200)
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
+		files.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en", []library.Feed{{ID: "main", Address: srv.URL + "/"}})
+	lib := a.o.Library
+	lib.Start(map[string]library.Choice{"main": {Packs: []string{"pop"}}})
+	eventually(t, a, "pop downloaded", func() bool { s := lib.Status(); return !s.Running && s.Results["main"] != nil })
+	if r := lib.Status().Results["main"]; len(r.Added) != 1 {
+		t.Fatalf("first download: %+v", r)
+	}
+	stall.Store(true)
+	lib.Start(map[string]library.Choice{"main": {Packs: []string{"pop", "rock"}}})
+	eventually(t, a, "rock downloading", func() bool { return lib.Status().Running })
+	stall.Store(false) // new requests are served; the running one hangs until the download is paused
+	onUI(a, func() { a.o.Settings.Exclude = []string{"nd"}; a.applyExclude() })
+	eventually(t, a, "the download with the filter ended", func() bool {
+		s := lib.Status()
+		return !s.Running && s.Results["main"] != nil && len(s.Results["main"].Added) == 1 // rock
+	})
+	if entries, _ := os.ReadDir(lib.Dir("main")); slices.ContainsFunc(entries, func(e os.DirEntry) bool { return strings.HasSuffix(e.Name(), "-a") }) {
+		t.Fatalf("the ND song is still there: the filter was not applied (%v)", entries)
+	}
+}
+
+// TestSettingsDialogKeepsScreen: answering a settings dialog after going back to Home does not jump to Settings.
+func TestSettingsDialogKeepsScreen(t *testing.T) {
+	a := testApp(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en")
+	feed := settings.Feed{Address: "https://example.org/feed/"}
+	a.o.Settings.Feeds = []settings.Feed{feed}
+	onUI(a, a.showSettings)
+	onUI(a, func() { a.removeSource(feed) })
+	var confirm *widget.Button
+	onUI(a, func() { confirm = button(a.win.Canvas().Overlays().Top(), "Remove") })
+	onUI(a, a.showHome) // the dialog stays open; the user went back
+	onUI(a, func() { confirm.OnTapped() })
+	onUI(a, func() {
+		if a.home == nil {
+			t.Error("answering the dialog jumped from Home to Settings")
+		}
+	})
 }
