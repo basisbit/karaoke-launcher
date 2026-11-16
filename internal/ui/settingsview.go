@@ -37,8 +37,17 @@ func (a *App) save() bool {
 	return true
 }
 
+// reshowSettings builds the settings screen again after a dialog, but only while it is on show (the user may have
+// gone back to Home meanwhile).
+func (a *App) reshowSettings() {
+	if a.settingsOn {
+		a.showSettings()
+	}
+}
+
 func (a *App) showSettings() {
 	a.home, a.songs = nil, nil
+	defer func() { a.settingsOn = true }() // after setContent, which clears it
 	tr, set := a.tr, a.o.Settings
 
 	// song folder
@@ -100,6 +109,7 @@ func (a *App) showSettings() {
 		set.Language = code
 		if a.save() {
 			a.tr = NewTranslator(code)
+			a.win.SetTitle(a.o.Config.Name.Get(a.tr.Code()))
 			a.setReadmes()
 			a.showSettings() // all texts in the new language
 		}
@@ -152,15 +162,22 @@ func section(text string) fyne.CanvasObject {
 	return widget.NewLabelWithStyle(text, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 }
 
-// applyExclude starts an update so that the licence filter takes effect on the songs that are there.
+// applyExclude starts an update so that the licence filter takes effect on the songs that are there. A running
+// download is paused for it and continues with the filter.
 func (a *App) applyExclude() {
 	choices := map[string]library.Choice{}
 	for _, f := range a.o.Library.Feeds() {
 		choices[f.ID] = library.Choice{Exclude: a.exclude()}
 	}
-	if err := a.o.Library.Start(choices); err != nil && !errors.Is(err, library.ErrBusy) {
-		a.showError("error.generic", err)
-	}
+	lib := a.o.Library
+	go func() {
+		if lib.Status().Running {
+			lib.Pause() // waits until it stopped
+		}
+		if err := lib.Start(choices); err != nil && !errors.Is(err, library.ErrBusy) {
+			a.do(func() { a.showError("error.generic", err) })
+		}
+	}()
 }
 
 // sourcesBox lists the feeds the user added, with Remove, and a field to add one.
@@ -190,7 +207,7 @@ func (a *App) importBox() fyne.CanvasObject {
 	changed := func() {
 		if a.save() {
 			a.o.Library.SetSeeds(set.Import)
-			a.showSettings()
+			a.reshowSettings()
 		}
 	}
 	for _, dir := range set.Import {
@@ -290,7 +307,7 @@ func (a *App) addSource(address string) {
 					}
 					set.Feeds = append(set.Feeds, settings.Feed{Address: address})
 					if a.save() {
-						a.showSettings()
+						a.reshowSettings()
 					}
 				}, a.win)
 			d.Resize(fyne.NewSize(460, 240))
@@ -317,7 +334,7 @@ func (a *App) removeSource(f settings.Feed) {
 		if err := os.RemoveAll(a.o.Library.Dir(library.AddedID(f.Address))); err != nil {
 			a.showError("error.generic", err)
 		}
-		a.showSettings()
+		a.reshowSettings()
 	}, a.win)
 	d.SetConfirmText(tr.T("songs.remove.yes"))
 	d.SetDismissText(tr.T("button.cancel"))

@@ -33,6 +33,7 @@ func (w *resizeWatcher) CreateRenderer() fyne.WidgetRenderer {
 
 // setContent shows a screen in the window.
 func (a *App) setContent(o fyne.CanvasObject) {
+	a.settingsOn = false // showSettings sets it again
 	if a.watcher == nil {
 		a.watcher = newResizeWatcher(func(s fyne.Size) {
 			if a.fullDialog != nil {
