@@ -10,7 +10,7 @@
   "developer": "Example Community",
   "site": "http://127.0.0.1:8090/",
   "launcher": {
-    "version": "v0.1.0",
+    "version": "v0.2.0",
     "repo": "basisbit/karaoke-launcher"
   },
   "files": [
