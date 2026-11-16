@@ -111,7 +111,7 @@ func TestWindows(t *testing.T) {
 		t.Errorf("the setup does not run the old launcher's --uninstall before it installs (at %d, first File at %d)", un, file)
 	}
 	// A kept file (the game's settings) is installed only when it is not there yet: reinstalling keeps the player's.
-	kept := regexp.MustCompile(`SetOverwrite off\n\s*File "[^"\n]*config\.ini"\n\s*SetOverwrite on\n`)
+	kept := regexp.MustCompile(`SetOverwrite off\r?\n\s*File "[^"\n]*config\.ini"\r?\n\s*SetOverwrite on\r?\n`) // CRLF on Windows
 	if !kept.Match(script) || strings.Count(string(script), "SetOverwrite off") != 1 {
 		t.Errorf("config.ini is not installed with SetOverwrite off (and only it):\n%s", script)
 	}
