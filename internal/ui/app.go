@@ -56,7 +56,8 @@ type App struct {
 	infoMu sync.Mutex
 	infos  map[string]*kfeed.Info // last description of each feed
 
-	do func(func()) // run on the UI goroutine
+	do    func(func()) // run on the UI goroutine
+	raise func()       // brings the window to the front (a second start asked for it)
 
 	watcher    *resizeWatcher
 	fullDialog interface{ Resize(fyne.Size) } // a dialog that follows the window size, or nil
@@ -82,6 +83,7 @@ func New(fa fyne.App, o Options) *App {
 	if a.do == nil {
 		a.do = fyne.Do
 	}
+	a.raise = func() { a.win.Show(); a.win.RequestFocus() }
 	fa.Settings().SetTheme(a.th)
 	a.win = fa.NewWindow(o.Config.Name.Get(a.tr.Code()))
 	if p := o.Config.Asset(o.Config.Look.Logo); p != "" { // the community's logo is also the window and app icon
@@ -102,6 +104,7 @@ func (a *App) Window() fyne.Window { return a.win }
 // Run shows the window and starts the background work; it returns when the window is closed.
 func (a *App) Run() {
 	a.Start()
+	defer a.watchRaise()()
 	a.win.ShowAndRun()
 }
 

@@ -61,7 +61,8 @@ func main() {
 	lib, err := library.Open(userdata, set.Library, ui.LibraryFeeds(cfg, set), nil)
 	if err != nil {
 		if errors.Is(err, library.ErrRunning) {
-			os.Exit(0) // the other window is open already; a second one would only confuse
+			ui.AskToRaise(userdata) // the other window is open already: it comes to the front
+			os.Exit(0)
 		}
 		fatal(set, "error.generic", err)
 		return
