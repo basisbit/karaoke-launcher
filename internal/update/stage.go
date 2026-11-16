@@ -13,9 +13,12 @@ import (
 // Stage downloads an update and unpacks it next to its component, ready for Apply (docs/updates.md, rule 8). An
 // interrupted download continues at the next call. progress may be nil.
 func (u *Updater) Stage(ctx context.Context, up Update, progress func(done, total int64)) error {
-	var r ready
-	if readJSON(readyPath(up.Dir, up.ID), &r) == nil && r.Version == up.Version {
+	if r, _ := staged(up.Dir, up.ID); r != nil && r.Version == up.Version && r.SHA256 == up.File.SHA256 {
 		return nil // staged already; Apply was not run yet
+	}
+	from, err := installedVersion(up.Dir, up.ID)
+	if err != nil {
+		return err
 	}
 	hexsum := strings.TrimPrefix(up.File.SHA256, "sha256:")
 	downloads := filepath.Join(u.UserData, "updates")
@@ -45,7 +48,7 @@ func (u *Updater) Stage(ctx context.Context, up Update, progress func(done, tota
 		os.Remove(archive) // the hash was right, so it is the archive itself that is refused
 		return err
 	}
-	if err := writeJSON(readyPath(up.Dir, up.ID), ready{Version: up.Version, Files: files}); err != nil {
+	if err := writeJSON(readyPath(up.Dir, up.ID), ready{Version: up.Version, From: from, SHA256: up.File.SHA256, Files: files}); err != nil {
 		os.RemoveAll(staging)
 		return err
 	}

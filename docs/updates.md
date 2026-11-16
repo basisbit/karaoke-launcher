@@ -71,12 +71,17 @@ checks it and installs it. Players don't have to do anything.
   highest number it has seen and ignores an `app.json` with a lower one, so an old file can't be sent again to
   install an old version.
 - `version` is a text. The launcher doesn't compare versions: any version that differs from the installed one is
-  installed. To go back to an older version, list it with a higher `sequence`.
+  installed. To go back to an older version, list it with a higher `sequence`. This also means: a player who
+  installed a newer version than `app.json` lists (a test setup) gets the listed one at the next start.
+- Never change the archive of a version that is published already. Publish the fix under a new version text such as
+  `2026.11.0-2`. (A player who has the old archive downloaded but not installed yet gets the new one, but a player
+  who installed it keeps it.)
 - `files`: one archive per system. The key is the Go name of the system and processor: `windows-amd64`,
   `linux-amd64`, `darwin-arm64` and so on.
   - `url`: a full `https://` address, or an address relative to `app.json`.
   - `sha256` and `size` of the archive. The launcher refuses an archive that doesn't match.
-  - Archives must be `.zip`, `.tar.gz` or `.tgz`.
+  - Archives must be `.zip`, `.tar.gz` or `.tgz`. Programs for macOS and Linux need their executable bit in the
+    archive: make those archives on macOS or Linux (a `.tar.gz` keeps it; a `.zip` made on Windows doesn't).
   - `strip` (optional): how many folder levels to remove from every path in the archive. Use `1` when everything is
     inside one top folder such as `game-2.0.0/`.
 
@@ -150,6 +155,10 @@ builds and runs is never replaced. A game folder without its file is updated onl
 4. The new files are moved into place. A file that can't be replaced because it is in use is renamed first, in the
    same way. A folder is never moved aside to make room for a file: it may hold the player's files.
 5. The list of installed files is saved in `.component-<component>.json` in the component's folder.
+
+A downloaded update belongs to the version that was installed when it was downloaded. If another version was
+installed in between (a setup run by the player), it is thrown away and never installed over it. If a file of it is
+missing, it is thrown away before anything changes and downloaded again.
 
 If the computer is switched off in the middle, the next start finishes the job. Nothing is written or deleted
 through a link (symbolic link, junction) in the component's folder. On Windows and macOS, `Game.exe` and `game.exe`

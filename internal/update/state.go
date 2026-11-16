@@ -21,6 +21,8 @@ type State struct {
 // ready is <dir>/.update-<id>/ready.json: an unpacked update that waits to be applied. It is written last.
 type ready struct {
 	Version string   `json:"version"`
+	From    string   `json:"from"`   // the installed version it was staged for ("" = none installed)
+	SHA256  string   `json:"sha256"` // of the archive it was unpacked from
 	Files   []string `json:"files"`
 }
 
