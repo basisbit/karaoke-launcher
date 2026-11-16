@@ -147,6 +147,8 @@ func TestSongsKeepsTicks(t *testing.T) {
 func TestSongsPlanError(t *testing.T) {
 	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en", nil)
 	onUI(a, a.showSongs)
+	// the list loads in the background: wait for it, so that nothing writes into the folders while they are removed
+	eventually(t, a, "list loaded", func() bool { return len(a.songs.feeds) > 0 })
 	onUI(a, func() {
 		s := a.songs
 		s.showPlan(1<<50, 1, nil)
