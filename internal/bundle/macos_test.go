@@ -7,8 +7,10 @@ import (
 	"encoding/xml"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -80,8 +82,12 @@ func TestMacos(t *testing.T) {
 		t.Fatal(err, signer)
 	}
 	want := filepath.Join(o.Out, "macos", "example-1.2.0-beta-macos-arm64.zip")
-	if len(files) != 1 || files[0] != want { // no hdiutil here
-		t.Fatalf("files: %v", files)
+	wantFiles := []string{want}
+	if _, err := exec.LookPath("hdiutil"); err == nil { // only on a Mac
+		wantFiles = append(wantFiles, strings.TrimSuffix(want, ".zip")+".dmg")
+	}
+	if !slices.Equal(files, wantFiles) {
+		t.Fatalf("files: %v, want %v", files, wantFiles)
 	}
 	zr, err := zip.OpenReader(want)
 	if err != nil {
