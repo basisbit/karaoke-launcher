@@ -155,7 +155,7 @@ func mergeJSON(base, over any, at string) any {
 	_, url := om["url"]
 	_, path := om["path"]
 	if ok1 && ok2 && !url && !path {
-		out := make(map[string]any, len(bm)+len(om))
+		out := make(map[string]any, len(bm))
 		for k, v := range bm {
 			out[k] = v
 		}

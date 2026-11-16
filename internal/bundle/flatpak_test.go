@@ -15,6 +15,7 @@ func flatpakFixture(t *testing.T) (*fixture, Options) {
 	f := newFixture(t)
 	f.launcher["app_id"] = "org.example.Karaoke"
 	f.launcher["name"] = map[string]any{"en": "Sing & <Shout>\n\"now\"", "de": " Singen"}
+	f.bundle["developer"] = `Tom "&" <Co>`
 	f.bundle["description"] = "First paragraph with <tags> & more.\n\nSecond   one."
 	writeFile(t, filepath.Join(f.dir, "flatpak", "game.yml"), []byte("name: game\nbuildsystem: simple\nbuild-commands: []\n"))
 	f.bundle["flatpak"] = map[string]any{"runtime": "org.freedesktop.Platform", "runtime_version": "26.08",
@@ -79,12 +80,17 @@ func TestFlatpakFiles(t *testing.T) {
 		Name       string   `xml:"name"`
 		Paragraphs []string `xml:"description>p"`
 		Launchable string   `xml:"launchable"`
+		Developer  string   `xml:"developer>name"`
+		Releases   []struct {
+			Version string `xml:"version,attr"`
+		} `xml:"releases>release"`
 	}
 	if err := xml.Unmarshal(meta, &c); err != nil {
 		t.Fatalf("metainfo is no XML: %v\n%s", err, meta)
 	}
 	if c.ID != "org.example.Karaoke" || c.Name != "Sing & <Shout>\n\"now\"" || c.Launchable != "org.example.Karaoke.desktop" ||
-		len(c.Paragraphs) != 2 || c.Paragraphs[0] != "First paragraph with <tags> & more." || c.Paragraphs[1] != "Second one." {
+		len(c.Paragraphs) != 2 || c.Paragraphs[0] != "First paragraph with <tags> & more." || c.Paragraphs[1] != "Second one." ||
+		c.Developer != `Tom "&" <Co>` || len(c.Releases) != 1 || c.Releases[0].Version != "1.0.0" {
 		t.Fatalf("metainfo: %+v", c)
 	}
 }
