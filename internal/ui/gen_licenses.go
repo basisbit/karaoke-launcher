@@ -22,7 +22,7 @@ var licenceRe = regexp.MustCompile(`(?i)^(licen[cs]e|copying|notice|copyright|un
 // sourceExt are files whose names match licenceRe but are code, not licences (copyright_test.go).
 var sourceExt = map[string]bool{".go": true, ".c": true, ".h": true, ".s": true, ".py": true, ".sh": true}
 
-type module struct{ path, version, dir string }
+type module struct{ path, dir string }
 
 func main() {
 	if err := run(); err != nil {
@@ -43,14 +43,14 @@ func run() error {
 	mods := map[string]module{}
 	for _, goos := range []string{"linux", "windows", "darwin"} {
 		out, err := goCmd([]string{"GOOS=" + goos, "CGO_ENABLED=1"}, "list", "-deps", "-f",
-			`{{if .Module}}{{if not .Module.Main}}{{.Module.Path}}|{{.Module.Version}}|{{.Module.Dir}}{{end}}{{end}}`,
+			`{{if .Module}}{{if not .Module.Main}}{{.Module.Path}}|{{.Module.Dir}}{{end}}{{end}}`,
 			"../../cmd/karaoke-launcher")
 		if err != nil {
 			return err
 		}
 		for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-			if p := strings.Split(line, "|"); len(p) == 3 {
-				mods[p[0]] = module{p[0], p[1], p[2]}
+			if p := strings.Split(line, "|"); len(p) == 2 {
+				mods[p[0]] = module{p[0], p[1]}
 			}
 		}
 	}
@@ -77,11 +77,8 @@ func run() error {
 	for _, p := range paths {
 		m := mods[p]
 		local := !strings.HasPrefix(m.dir, modcache) // a replace to a local checkout
-		version := m.version
-		if local {
-			version = "local checkout"
-		}
-		if err := section(&b, m.path+" "+version, m.dir, local); err != nil {
+		// No version in the title: a dependency update that keeps the licence leaves licenses.txt unchanged.
+		if err := section(&b, m.path, m.dir, local); err != nil {
 			return err
 		}
 	}

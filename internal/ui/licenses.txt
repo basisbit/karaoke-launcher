@@ -264,7 +264,7 @@ Some files from Intel carry the following license:
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-fyne.io/fyne/v2 v2.8.2
+fyne.io/fyne/v2
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -547,7 +547,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ============================================================
-fyne.io/systray v1.12.3-0.20260810170012-af4e8e793ec4
+fyne.io/systray
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -754,7 +754,7 @@ Apache License
    limitations under the License.
 
 ============================================================
-github.com/BurntSushi/toml v1.6.0
+github.com/BurntSushi/toml
 ------------------------------------------------------------
 --- COPYING ---
 
@@ -853,7 +853,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ============================================================
-github.com/FyshOS/fancyfs v0.0.1
+github.com/FyshOS/fancyfs
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -884,7 +884,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/anthonynsimon/bild v0.14.0
+github.com/anthonynsimon/bild
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -911,7 +911,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115120226-d49822d38264
+github.com/basisbit/karaoke-feeds/tool
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -947,7 +947,7 @@ repository, see .gitignore):
   to their authors.
 
 ============================================================
-github.com/clipperhouse/uax29/v2 v2.2.0
+github.com/clipperhouse/uax29/v2
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -974,7 +974,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/fsnotify/fsnotify v1.9.0
+github.com/fsnotify/fsnotify
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1005,7 +1005,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/fyne-io/image v0.1.1
+github.com/fyne-io/image
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1274,7 +1274,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/fyne-io/oksvg v0.2.1-0.20260918172519-a9af55fa95d9
+github.com/fyne-io/oksvg
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1309,7 +1309,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/go-gl/gl v0.0.0-20260331235117-4566fea9a276
+github.com/go-gl/gl
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1336,7 +1336,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.2
+github.com/go-gl/glfw/v3.4/glfw
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1394,7 +1394,7 @@ freely, subject to the following restrictions:
    distribution.
 
 ============================================================
-github.com/go-text/render v0.2.1
+github.com/go-text/render
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1455,7 +1455,7 @@ For more information, please refer to <https://unlicense.org/>
 ---
 
 ============================================================
-github.com/go-text/typesetting v0.3.5
+github.com/go-text/typesetting
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1553,7 +1553,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/godbus/dbus/v5 v5.2.2
+github.com/godbus/dbus/v5
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1584,7 +1584,7 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/jeandeaual/go-locale v0.0.0-20250612000132-0ef82f21eade
+github.com/jeandeaual/go-locale
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1611,7 +1611,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/jsummers/gobmp v0.0.0-20230614200233-a9de23ed2e25
+github.com/jsummers/gobmp
 ------------------------------------------------------------
 --- COPYING.txt ---
 
@@ -1636,7 +1636,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ============================================================
-github.com/mattn/go-runewidth v0.0.24
+github.com/mattn/go-runewidth
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1663,7 +1663,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
+github.com/nfnt/resize
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1682,7 +1682,7 @@ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 THIS SOFTWARE.
 
 ============================================================
-github.com/nicksnyder/go-i18n/v2 v2.5.1
+github.com/nicksnyder/go-i18n/v2
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1707,7 +1707,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 ============================================================
-github.com/rymdport/portal v0.4.2
+github.com/rymdport/portal
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1914,7 +1914,7 @@ Apache License
    limitations under the License.
 
 ============================================================
-github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c
+github.com/srwiley/oksvg
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1949,7 +1949,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
+github.com/srwiley/rasterx
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -1984,7 +1984,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ============================================================
-github.com/yuin/goldmark v1.8.2
+github.com/yuin/goldmark
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -2011,7 +2011,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ============================================================
-golang.org/x/image v0.48.0
+golang.org/x/image
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -2069,7 +2069,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 
 ============================================================
-golang.org/x/net v0.55.0
+golang.org/x/net
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -2127,7 +2127,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 
 ============================================================
-golang.org/x/sys v0.50.0
+golang.org/x/sys
 ------------------------------------------------------------
 --- LICENSE ---
 
@@ -2185,7 +2185,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 
 ============================================================
-golang.org/x/text v0.44.0
+golang.org/x/text
 ------------------------------------------------------------
 --- LICENSE ---
 
