@@ -322,12 +322,19 @@ func (l *Library) Pause() {
 }
 
 // Exclusive runs f while no feed is synced, inspected or planned, for example to install a program into a folder
-// that a sync may also write to (themes inside the game's folder). A running sync finishes its current feed first,
-// and the next feed waits until f returns.
+// that a sync may also write to (themes inside the game's folder). A running download is paused for f (it can take
+// hours) and continues afterwards with the stored choices.
 func (l *Library) Exclusive(f func()) {
+	running := l.Status().Running
+	if running {
+		l.Pause()
+	}
 	l.engine.Lock()
-	defer l.engine.Unlock()
 	f()
+	l.engine.Unlock()
+	if running {
+		l.Start(nil) // ErrBusy: somebody else started it meanwhile, fine
+	}
 }
 
 // Status returns the current state.

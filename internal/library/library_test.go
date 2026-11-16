@@ -183,6 +183,60 @@ func TestPause(t *testing.T) {
 	}
 }
 
+// TestExclusive: an install does not wait for a running download (that can take hours); the download is paused
+// for it and continues afterwards.
+func TestExclusive(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a", "b"}})
+	var stall atomic.Bool
+	stall.Store(true)
+	files := http.FileServer(http.Dir(pub))
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if stall.Load() && strings.HasPrefix(r.URL.Path, "/blobs/") {
+			w.WriteHeader(200)
+			io.WriteString(w, "dummy")
+			w.(http.Flusher).Flush()
+			<-r.Context().Done()
+			return
+		}
+		files.ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+	downloading := make(chan struct{}, 1)
+	l, err := Open(t.TempDir(), t.TempDir(), []Feed{{ID: "main", Address: srv.URL + "/"}}, func(s Status) {
+		if s.Progress.Phase == "downloading" {
+			select {
+			case downloading <- struct{}{}:
+			default:
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	l.Start(map[string]Choice{"main": {Packs: []string{"pop"}}})
+	select {
+	case <-downloading:
+	case <-time.After(10 * time.Second):
+		t.Fatal("download did not start")
+	}
+	ran := make(chan bool, 1)
+	go l.Exclusive(func() { ran <- l.Status().Running })
+	select {
+	case running := <-ran:
+		if running {
+			t.Error("the download still ran during Exclusive")
+		}
+	case <-time.After(5 * time.Second):
+		stall.Store(false)
+		t.Fatal("Exclusive waited for the running download")
+	}
+	stall.Store(false)
+	if s := waitIdle(t, l); s.Err != nil || len(s.Results["main"].Added) != 2 {
+		t.Fatalf("the download did not continue after Exclusive: %+v", s)
+	}
+}
+
 func TestAddedID(t *testing.T) {
 	a, b := AddedID("https://example.org/feed/"), AddedID("https://example.org/feed/#ed25519=abc")
 	if a != b || !strings.HasPrefix(a, "added-") || len(a) != len("added-")+8 || a == AddedID("https://example.org/other/") {
