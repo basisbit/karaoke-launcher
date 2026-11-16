@@ -3,7 +3,8 @@
 A desktop launcher for karaoke communities. Players use it to pick the song packs they want, download them, keep
 them up to date and start their karaoke game, without admin rights and without a huge all-or-nothing download.
 
-**Status: early.** Nothing here is ready for players yet.
+**Status: early.** Nothing here is ready for players yet. The file formats (`launcher.json`, `bundle.json`,
+`game.json`, `app.json`) will change without notice before 1.0.
 
 ## Who it is for
 
