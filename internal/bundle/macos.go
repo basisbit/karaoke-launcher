@@ -49,7 +49,7 @@ func (b *Bundle) Macos(ctx context.Context, o Options) (files []string, signer s
 	appName := shortcutName(b.Name(), b.Config.ID) + ".app"
 	contents := filepath.Join(stage, appName, "Contents")
 	res := filepath.Join(contents, "Resources")
-	if _, err := b.assemble(ctx, o, darwin, "macos", res, filepath.Join(contents, "MacOS", "karaoke-launcher")); err != nil {
+	if _, _, err := b.assemble(ctx, o, darwin, "macos", res, filepath.Join(contents, "MacOS", "karaoke-launcher")); err != nil {
 		return nil, "", err
 	}
 	nested, err := b.helperApps(ctx, o, out, filepath.Join(contents, "Helpers"))

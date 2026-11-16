@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -103,6 +104,16 @@ func TestWindows(t *testing.T) {
 	}
 	if strings.Contains(string(script), "\nNight") {
 		t.Error("a line break of the name reached the script")
+	}
+	// An older installation is removed first with the launcher's own rules, so that files only it had don't stay.
+	un := strings.Index(string(script), `ExecWait '"$INSTDIR\karaoke-launcher.exe" --uninstall'`)
+	if file := strings.Index(string(script), "\n  File "); un < 0 || file < 0 || un > file {
+		t.Errorf("the setup does not run the old launcher's --uninstall before it installs (at %d, first File at %d)", un, file)
+	}
+	// A kept file (the game's settings) is installed only when it is not there yet: reinstalling keeps the player's.
+	kept := regexp.MustCompile(`SetOverwrite off\n\s*File "[^"\n]*config\.ini"\n\s*SetOverwrite on\n`)
+	if !kept.Match(script) || strings.Count(string(script), "SetOverwrite off") != 1 {
+		t.Errorf("config.ini is not installed with SetOverwrite off (and only it):\n%s", script)
 	}
 	if o.Makensis == "-" {
 		t.Log("makensis not found: the setup program was not built")
