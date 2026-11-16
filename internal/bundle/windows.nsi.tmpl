@@ -27,10 +27,21 @@ Section
   MessageBox MB_OK|MB_ICONSTOP "The folder $INSTDIR already exists, but it was not made by this installer. Nothing was installed." /SD IDOK
   Abort
 install:
+  ; An older installation goes first, by the launcher's own rules (kept files, the game's own files and the user's
+  ; stay): files that only the old version had must not stay behind, unlisted and never uninstalled.
+  IfFileExists "$INSTDIR\.component-launcher.json" 0 fresh
+  ExecWait '"$INSTDIR\karaoke-launcher.exe" --uninstall'
+fresh:
 {{- range .Dirs}}
   SetOutPath {{.Target}}
 {{- range .Files}}
-  File {{.}}
+{{- if .Keep}}
+  SetOverwrite off
+  File {{.Src}}
+  SetOverwrite on
+{{- else}}
+  File {{.Src}}
+{{- end}}
 {{- end}}
 {{- end}}
   SetOutPath "$INSTDIR"

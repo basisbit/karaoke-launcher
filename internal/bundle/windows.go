@@ -120,54 +120,55 @@ func (b *Bundle) componentArchive(ctx context.Context, f File, cache string) (st
 // every component the package contains (componentFolders), unpacked into its folder with its state file. The launcher
 // program goes to exe; it belongs to the launcher component when it is inside dir. It returns the files of the
 // launcher component (without state file).
-func (b *Bundle) assemble(ctx context.Context, o Options, platform, system, dir, exe string) ([]string, error) {
+func (b *Bundle) assemble(ctx context.Context, o Options, platform, system, dir, exe string) (files, kept []string, err error) {
 	folders, err := b.componentFolders(platform, system, system != "macos")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	src, err := b.LauncherBinary(ctx, platform, o.LauncherDir, filepath.Join(o.Out, "cache"))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err := copyFile(src, exe, 0o755); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var files []string
 	if rel, err := filepath.Rel(dir, exe); err == nil && filepath.IsLocal(rel) {
 		files = append(files, filepath.ToSlash(rel))
 	}
 	for _, s := range b.Shipped {
 		if err := s.copyTo(filepath.Join(dir, filepath.FromSlash(s.Rel))); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		files = append(files, s.Rel)
 	}
 	if err := update.WriteState(dir, update.State{Component: config.Launcher, Version: b.Version, Files: files}); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for _, id := range slices.Sorted(maps.Keys(folders)) {
 		c := b.Components[id]
 		archive, err := b.componentArchive(ctx, c.Files[platform], filepath.Join(o.Out, "cache"))
 		if err != nil {
-			return nil, fmt.Errorf("component %s: %v", id, err)
+			return nil, nil, fmt.Errorf("component %s: %v", id, err)
 		}
 		target := filepath.Join(dir, filepath.FromSlash(folders[id]))
 		unpacked, err := update.Unpack(archive, target, c.Files[platform].Strip)
 		if err != nil {
-			return nil, fmt.Errorf("component %s: %v", id, err)
+			return nil, nil, fmt.Errorf("component %s: %v", id, err)
 		}
 		cc, _ := b.configComponent(id)
 		var listed []string // as the launcher's own installation lists them: kept files are not listed
 		for _, rel := range unpacked {
 			if !update.Keep(cc.Keep, rel) {
 				listed = append(listed, rel)
+			} else if k, err := filepath.Rel(dir, filepath.Join(target, filepath.FromSlash(rel))); err == nil {
+				kept = append(kept, filepath.ToSlash(k))
 			}
 		}
 		if err := update.WriteState(target, update.State{Component: id, Version: c.Version, Files: listed}); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return files, nil
+	return files, kept, nil
 }
 
 // Windows writes <Out>/windows/: the portable zip (<id>-<version>-windows-portable.zip), the launcher component for
@@ -180,7 +181,7 @@ func (b *Bundle) Windows(ctx context.Context, o Options) ([]string, error) {
 	}
 	id := b.Config.ID
 	stage := filepath.Join(out, "installer-files", id)
-	files, err := b.assemble(ctx, o, windows, "windows", stage, filepath.Join(stage, launcherExe))
+	files, kept, err := b.assemble(ctx, o, windows, "windows", stage, filepath.Join(stage, launcherExe))
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func (b *Bundle) Windows(ctx context.Context, o Options) ([]string, error) {
 		return nil, err
 	}
 	setup := fmt.Sprintf("%s-%s-windows-setup.exe", id, b.Version)
-	script, err := b.nsis(stage, out, setup)
+	script, err := b.nsis(stage, out, setup, kept)
 	if err != nil {
 		return nil, err
 	}
@@ -255,13 +256,18 @@ func shortcutName(name, id string) string {
 }
 
 type nsiDir struct {
-	Target string   // quoted: "$INSTDIR\…"
-	Files  []string // quoted source paths, relative to the script
+	Target string // quoted: "$INSTDIR\…"
+	Files  []nsiFile
 }
 
-// nsis returns the installer script for the files in stage (a folder below out).
-func (b *Bundle) nsis(stage, out, setup string) ([]byte, error) {
-	byDir := map[string][]string{}
+type nsiFile struct {
+	Src  string // quoted source path, relative to the script
+	Keep bool   // a kept file (the game's settings): installed only when it is not there yet
+}
+
+// nsis returns the installer script for the files in stage (a folder below out). kept are paths relative to stage.
+func (b *Bundle) nsis(stage, out, setup string, kept []string) ([]byte, error) {
+	byDir := map[string][]nsiFile{}
 	err := filepath.WalkDir(stage, func(name string, e fs.DirEntry, err error) error {
 		if err != nil || e.IsDir() {
 			return err
@@ -269,7 +275,7 @@ func (b *Bundle) nsis(stage, out, setup string) ([]byte, error) {
 		rel, _ := filepath.Rel(stage, name)
 		src, _ := filepath.Rel(out, name)
 		dir := path.Dir(filepath.ToSlash(rel))
-		byDir[dir] = append(byDir[dir], nsisQuote(filepath.ToSlash(src)))
+		byDir[dir] = append(byDir[dir], nsiFile{nsisQuote(filepath.ToSlash(src)), slices.Contains(kept, filepath.ToSlash(rel))})
 		return nil
 	})
 	if err != nil {
