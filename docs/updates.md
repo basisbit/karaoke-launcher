@@ -138,7 +138,8 @@ builds and runs is never replaced. A game folder without its file is updated onl
 
 1. The archive is downloaded into the launcher's per-user folder. An interrupted download continues later.
 2. It is unpacked into a hidden folder `.update-<component>` next to the component. The whole archive is refused if
-   one entry is unsafe: an absolute path, `..`, `\` or `:` in a path, a name that Windows keeps for devices (`con`,
+   one entry is unsafe: an absolute path, `..`, `\` or `:` in a path, one of `< > " | ? *` in a name, a name that
+   Windows keeps for devices (`con`,
    `nul`, `com1`, …), a name that ends with `.` or a space, a link or special file, two names that differ only in
    upper and lower case, a name that starts with `.component-` or `.update-`, more than 100,000 entries or more than
    16 GiB of data.
