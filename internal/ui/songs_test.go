@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,6 +120,96 @@ func TestSongsScreen(t *testing.T) {
 	onUI(a, func() {
 		if s.feeds[0].checks["pop"].Checked {
 			t.Error("starter pack ticked again after removing all packs")
+		}
+	})
+}
+
+// TestSongsKeepsTicks: a reload of the list (after a download ended) keeps the ticks the user has not applied yet.
+func TestSongsKeepsTicks(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a"}, "Rock": {"c"}})
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en", []library.Feed{{ID: "main", Address: pub}})
+	onUI(a, a.showSongs)
+	var s *songs
+	onUI(a, func() { s = a.songs })
+	eventually(t, a, "packs listed", func() bool { return len(s.feeds) == 1 && s.feeds[0].checks["rock"] != nil })
+	var old *feedView
+	onUI(a, func() { old = s.feeds[0]; s.feeds[0].checks["rock"].SetChecked(true) })
+	onUI(a, s.reload) // what the end of a download does
+	eventually(t, a, "list reloaded", func() bool { return len(s.feeds) == 1 && s.feeds[0] != old })
+	onUI(a, func() {
+		if !s.feeds[0].checks["rock"].Checked {
+			t.Error("the reload wiped a tick the user had not applied yet")
+		}
+	})
+}
+
+// TestSongsPlanError: when the estimate fails, Download is not left disabled by an earlier "not enough space".
+func TestSongsPlanError(t *testing.T) {
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en", nil)
+	onUI(a, a.showSongs)
+	onUI(a, func() {
+		s := a.songs
+		s.showPlan(1<<50, 1, nil)
+		if !s.download.Disabled() {
+			t.Fatal("Download enabled although nothing fits")
+		}
+		s.showPlan(0, 0, errors.New("estimate failed"))
+		if s.download.Disabled() {
+			t.Error("Download stays disabled after a failed estimate")
+		}
+	})
+}
+
+// TestSongsChecksWhileRunning: packs can't be changed while a download runs (pause first).
+func TestSongsChecksWhileRunning(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a"}})
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en", []library.Feed{{ID: "main", Address: pub}})
+	onUI(a, a.showSongs)
+	var s *songs
+	onUI(a, func() { s = a.songs })
+	eventually(t, a, "packs listed", func() bool { return len(s.feeds) == 1 && s.feeds[0].checks["pop"] != nil })
+	var old *feedView
+	onUI(a, func() {
+		old = s.feeds[0]
+		s.refresh(library.Status{Running: true})
+		if !s.feeds[0].checks["pop"].Disabled() {
+			t.Error("a pack can be changed during a download")
+		}
+		s.refresh(library.Status{Paused: true})
+		if s.feeds[0].checks["pop"].Disabled() {
+			t.Error("a pack can't be changed while the download is paused")
+		}
+	})
+	// the end of the "download" reloads the list in the background: wait for it before the folders are removed
+	eventually(t, a, "list reloaded", func() bool { return len(s.feeds) == 1 && s.feeds[0] != old })
+}
+
+// TestSongsRemoveOnly: confirming the removal of one pack removes it and does not download other packs that are
+// ticked but not applied (that needs Download, with its free-space check).
+func TestSongsRemoveOnly(t *testing.T) {
+	pub := makeFeed(t, map[string][]string{"Pop": {"a"}, "Rock": {"c"}})
+	a := testAppFeeds(t, filepath.Join("..", "..", "examples", "light", "launcher.json"), "en",
+		[]library.Feed{{ID: "main", Address: pub, Starter: []string{"pop"}}})
+	onUI(a, a.showSongs)
+	var s *songs
+	onUI(a, func() { s = a.songs })
+	eventually(t, a, "packs listed", func() bool { return len(s.feeds) == 1 && s.feeds[0].checks["pop"] != nil })
+	onUI(a, func() { test.Tap(s.download) })
+	eventually(t, a, "pop downloaded", func() bool {
+		return !a.o.Library.Status().Running && len(s.feeds) == 1 && s.feeds[0].chosen["pop"]
+	})
+	onUI(a, func() { s.feeds[0].checks["rock"].SetChecked(true); s.feeds[0].checks["pop"].SetChecked(false) })
+	eventually(t, a, "confirmation", func() bool { return len(a.win.Canvas().Overlays().List()) > 0 })
+	onUI(a, func() { button(a.win.Canvas().Overlays().Top(), "Remove").OnTapped() })
+	eventually(t, a, "pop removed", func() bool {
+		return !a.o.Library.Status().Running && len(s.feeds) == 1 && !s.feeds[0].chosen["pop"] && s.feeds[0].checks["pop"] != nil
+	})
+	onUI(a, func() {
+		if s.feeds[0].chosen["rock"] {
+			t.Error("rock was downloaded by confirming the removal of pop")
+		}
+		if !s.feeds[0].checks["rock"].Checked {
+			t.Error("the tick on rock was lost")
 		}
 	})
 }
