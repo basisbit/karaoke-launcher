@@ -11,9 +11,12 @@
     { "type": "perf", "section": "Performance" },
     { "type": "revert", "section": "Reverts" },
     { "type": "docs", "section": "Documentation" },
-    { "type": "build", "section": "Build and dependencies", "hidden": true },
-    { "type": "ci", "section": "CI", "hidden": true },
-    { "type": "chore", "section": "Other", "hidden": true }
+    { "type": "refactor", "section": "Code refactoring" },
+    { "type": "test", "section": "Tests" },
+    { "type": "style", "section": "Style" },
+    { "type": "build", "section": "Build and dependencies" },
+    { "type": "ci", "section": "CI" },
+    { "type": "chore", "section": "Other" }
   ],
   "packages": {
     ".": { "package-name": "karaoke-launcher", "changelog-path": "CHANGELOG.md" }
