@@ -61,19 +61,45 @@ func Keep(keep []string, rel string) bool {
 
 // Pending reports whether an unpacked update of the component waits to be applied.
 func Pending(dir, id string) bool {
-	_, err := os.Stat(readyPath(dir, id))
-	return err == nil
+	r, err := staged(dir, id)
+	return err == nil && r != nil
+}
+
+// staged returns the update staged for the installed version of a component, or nil. A staging made for another
+// installed version (a setup installed a different one meanwhile) is deleted: it is never applied over it.
+func staged(dir, id string) (*ready, error) {
+	var r ready
+	if err := readJSON(readyPath(dir, id), &r); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	installed, err := installedVersion(dir, id)
+	if err != nil {
+		return nil, err
+	}
+	if r.From != installed {
+		return nil, os.RemoveAll(stagingDir(dir, id))
+	}
+	return &r, nil
+}
+
+// installedVersion is the installed version of a component, "" when none is installed.
+func installedVersion(dir, id string) (string, error) {
+	st, err := Installed(dir, id)
+	if st == nil || err != nil {
+		return "", err
+	}
+	return st.Version, nil
 }
 
 // Apply installs the unpacked update of a component (no network). It does nothing and returns false when there is
 // none. When it is interrupted or fails, the next call completes it. Files the launcher never wrote are never
 // deleted, files that match keep are never overwritten, and nothing is written or deleted through a link.
 func Apply(dir, id string, keep []string) (bool, error) {
-	var r ready
-	if err := readJSON(readyPath(dir, id), &r); err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return false, nil
-		}
+	r, err := staged(dir, id)
+	if r == nil || err != nil {
 		return false, err
 	}
 	old, err := Installed(dir, id)
@@ -90,6 +116,14 @@ func Apply(dir, id string, keep []string) (bool, error) {
 			return false, fmt.Errorf("update of %s: %s goes through a link in %s", id, rel, dir)
 		}
 		have[pathKey(rel)] = true
+		// Before anything changes: every file must be staged or in place already (moved by an interrupted run).
+		// A staging that lost a file is deleted, so that the next check stages the update again.
+		_, serr := os.Lstat(filepath.Join(staged, filepath.FromSlash(rel)))
+		_, terr := os.Lstat(filepath.Join(dir, filepath.FromSlash(rel)))
+		if errors.Is(serr, fs.ErrNotExist) && errors.Is(terr, fs.ErrNotExist) {
+			os.RemoveAll(stagingDir(dir, id))
+			return false, fmt.Errorf("update of %s: %s is missing from the downloaded update; it is downloaded again", id, rel)
+		}
 	}
 	// Files of the old version that the new one doesn't have go first, so that a file of the old version can become
 	// a folder of the new one and the other way round.

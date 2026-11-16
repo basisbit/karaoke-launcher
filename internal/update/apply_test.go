@@ -24,7 +24,11 @@ func stage(t *testing.T, dir, id, version string, files map[string]string) {
 		list = append(list, rel)
 	}
 	slices.Sort(list)
-	if err := writeJSON(readyPath(dir, id), ready{Version: version, Files: list}); err != nil {
+	from := ""
+	if st, _ := Installed(dir, id); st != nil {
+		from = st.Version
+	}
+	if err := writeJSON(readyPath(dir, id), ready{Version: version, From: from, Files: list}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -287,5 +291,58 @@ func TestApplyLinks(t *testing.T) {
 	Cleanup(dir)
 	if _, err := os.Stat(filepath.Join(outside, "x.old-1")); err != nil {
 		t.Fatal("Cleanup deleted through a link")
+	}
+}
+
+// TestApplyStagedForOtherVersion: an update staged for the installed v1 is dropped when a setup installed v3
+// meanwhile; it is never applied over v3 (no downgrade by a stale staging).
+func TestApplyStagedForOtherVersion(t *testing.T) {
+	dir := t.TempDir()
+	if err := WriteState(dir, State{Component: "game", Version: "1", Files: []string{"a.txt"}}); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("v1"), 0o644)
+	stage(t, dir, "game", "2", map[string]string{"a.txt": "v2"})
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("v3"), 0o644) // the setup of v3
+	if err := WriteState(dir, State{Component: "game", Version: "3", Files: []string{"a.txt"}}); err != nil {
+		t.Fatal(err)
+	}
+	if Pending(dir, "game") {
+		t.Error("an update staged for another installed version is pending")
+	}
+	applied, err := Apply(dir, "game", nil)
+	if err != nil || applied {
+		t.Fatalf("Apply = %v, %v", applied, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "a.txt")); string(data) != "v3" {
+		t.Fatalf("a.txt = %q", data)
+	}
+	if st, _ := Installed(dir, "game"); st.Version != "3" {
+		t.Fatalf("installed %s", st.Version)
+	}
+	if _, err := os.Stat(stagingDir(dir, "game")); err == nil {
+		t.Error("the stale staging is still there")
+	}
+}
+
+// TestApplyStagedFileMissing: a staging that lost a file (and whose target is not there either) is refused before
+// anything changes and deleted, so that the next check stages the update again instead of failing at every start.
+func TestApplyStagedFileMissing(t *testing.T) {
+	dir := t.TempDir()
+	WriteState(dir, State{Component: "game", Version: "1", Files: []string{"old.txt"}})
+	os.WriteFile(filepath.Join(dir, "old.txt"), []byte("v1"), 0o644)
+	stage(t, dir, "game", "2", map[string]string{"a.txt": "v2", "b.txt": "v2"})
+	os.Remove(filepath.Join(stagingDir(dir, "game"), "files", "b.txt"))
+	if _, err := Apply(dir, "game", nil); err == nil {
+		t.Fatal("Apply of an incomplete staging succeeded")
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "old.txt")); string(data) != "v1" {
+		t.Fatal("the installed version was changed")
+	}
+	if Pending(dir, "game") {
+		t.Fatal("the broken staging is still pending")
+	}
+	if applied, err := Apply(dir, "game", nil); applied || err != nil {
+		t.Fatalf("second Apply = %v, %v", applied, err)
 	}
 }

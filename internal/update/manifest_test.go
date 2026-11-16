@@ -328,3 +328,31 @@ func TestCheckAddressBOMAndFirstInstall(t *testing.T) {
 		t.Fatalf("folder with a foreign file: %v %v", ids(res), err)
 	}
 }
+
+// TestStageOtherArchive: when the site replaces the archive of a version that is staged already, the new archive is
+// staged and installed (the staged identity is version and archive hash).
+func TestStageOtherArchive(t *testing.T) {
+	s := newSite(t)
+	game := filepath.Join(t.TempDir(), "game")
+	os.MkdirAll(game, 0o755)
+	WriteState(game, State{Component: "game", Version: "1", Files: nil})
+	u := s.updater(Target{ID: "game", Dir: game})
+	ctx := context.Background()
+	stageNow := func(seq int64, f File) {
+		t.Helper()
+		s.publish(manifest(seq, map[string]Component{"game": comp("2", f)}), "")
+		res, err := u.Check(ctx)
+		if err != nil || len(res.Updates) != 1 {
+			t.Fatalf("check: %q %v", ids(res), err)
+		}
+		if err := u.Stage(ctx, res.Updates[0], nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stageNow(100, s.archive("a.zip", member{name: "game", body: "broken build"}))
+	stageNow(101, s.archive("b.zip", member{name: "game", body: "fixed build"}))
+	apply(t, game, "game", nil)
+	if got := tree(t, game); got["game"] != "fixed build" {
+		t.Fatalf("installed %q, want the replaced archive", got["game"])
+	}
+}
