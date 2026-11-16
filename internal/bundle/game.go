@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/basisbit/karaoke-launcher/games"
@@ -145,10 +147,35 @@ func (g *Game) check() error {
 	return nil
 }
 
+// versionOnly lists the components of the game definition whose version over (what the community wrote) changes
+// while an archive of the definition stays: that archive would ship under the new number. Overriding only archives
+// (a mirror) is fine.
+func versionOnly(base, over map[string]any) []string {
+	bc, _ := base["components"].(map[string]any)
+	oc, _ := over["components"].(map[string]any)
+	var p []string
+	for _, id := range slices.Sorted(maps.Keys(oc)) {
+		om, _ := oc[id].(map[string]any)
+		bm, _ := bc[id].(map[string]any)
+		if om == nil || bm == nil || om["version"] == nil || om["version"] == bm["version"] {
+			continue
+		}
+		for _, platform := range slices.Sorted(maps.Keys(bm)) {
+			f, _ := bm[platform].(map[string]any)
+			_, url := f["url"]
+			_, path := f["path"]
+			if (url || path) && om[platform] == nil {
+				p = append(p, fmt.Sprintf(`components.%s: "version" is %v, but the archive for %s is still the game definition's (%v): give your own archive for it too`, id, om["version"], platform, bm["version"]))
+			}
+		}
+	}
+	return p
+}
+
 // mergeJSON merges over (what the community wrote) into base (the game definition) and returns the result. Objects
 // are merged key by key, except a file (an object with "url" or "path", like an archive), which replaces the game's
-// as a whole; any other value of over replaces the one of base, except lists inside "flatpak", which are joined (base
-// first, each value once): the game's permissions stay when the community adds its own.
+// as a whole; any other value of over replaces the one of base, except lists inside "flatpak" and "keep" lists, which
+// are joined (base first, each value once): the game's permissions and kept files stay when the community adds its own.
 func mergeJSON(base, over any, at string) any {
 	bm, ok1 := base.(map[string]any)
 	om, ok2 := over.(map[string]any)
@@ -170,7 +197,9 @@ func mergeJSON(base, over any, at string) any {
 	}
 	ba, ok1 := base.([]any)
 	oa, ok2 := over.([]any)
-	if ok1 && ok2 && strings.HasPrefix(at, ".flatpak.") {
+	// Joined, not replaced: Flatpak lists, and keep lists (one added pattern must not drop the game's own, or an
+	// update overwrites the player's settings).
+	if ok1 && ok2 && (strings.HasPrefix(at, ".flatpak.") || strings.HasSuffix(at, ".keep")) {
 		out, seen := []any{}, map[string]bool{}
 		for _, v := range append(append([]any{}, ba...), oa...) {
 			key, _ := json.Marshal(v)

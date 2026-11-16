@@ -142,9 +142,13 @@ Flatpak modules yourself: the tool adds them to `bundle.json` and `launcher.json
 
 - Objects are merged key by key. A file (an object with `url` or `path`, like an archive) replaces the game's as a
   whole.
-- Lists inside `flatpak` (`finish_args`, `sdk_extensions`, `cleanup`) are joined: the game's first, each entry once.
+- Lists inside `flatpak` (`finish_args`, `sdk_extensions`, `cleanup`) and `keep` lists of components are joined: the
+  game's first, each entry once. So the files the game keeps (its settings) stay kept when you add your own.
 - Any other value you write replaces the game's. For example `"start": {"windows": [...]}` in your `launcher.json`
   replaces the start command on Windows and keeps the game's on Linux and macOS.
+- A component's `version` and its archives belong together: if you give another `version` for one of the game's
+  components, give your own archive for every system it has one for. `check` refuses a new version with the game's
+  archive.
 
 What UltraStar Deluxe gets on each system (component `ultrastar-deluxe`):
 

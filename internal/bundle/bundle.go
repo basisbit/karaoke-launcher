@@ -167,6 +167,7 @@ func Load(file string) (*Bundle, error) {
 		return nil, fmt.Errorf("%s is not a valid bundle.json: %v", file, err)
 	}
 	var game *Game
+	var versionProblems []string
 	if ref, ok := raw["game"]; ok {
 		var r GameRef
 		js, _ := json.Marshal(ref)
@@ -176,6 +177,7 @@ func Load(file string) (*Bundle, error) {
 		if game, err = loadGame(r, dir); err != nil {
 			return nil, err
 		}
+		versionProblems = versionOnly(game.Bundle, raw)
 		raw = mergeJSON(game.Bundle, raw, "").(map[string]any)
 		data, _ = json.Marshal(raw)
 	}
@@ -191,6 +193,7 @@ func Load(file string) (*Bundle, error) {
 		p = append(p, err.Error())
 	}
 	p = append(p, b.check()...)
+	p = append(p, versionProblems...)
 	if len(p) > 0 {
 		return nil, p
 	}

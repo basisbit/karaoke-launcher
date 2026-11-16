@@ -195,12 +195,15 @@ func TestGameRefs(t *testing.T) {
 
 func TestMergeJSON(t *testing.T) {
 	var base, over map[string]any
-	json.Unmarshal([]byte(`{"a": 1, "o": {"x": 1, "y": [1]}, "l": [1, 2], "flatpak": {"finish_args": ["--a", "--b"]}}`), &base)
-	json.Unmarshal([]byte(`{"a": 2, "o": {"y": [2], "z": 3}, "l": [3], "flatpak": {"finish_args": ["--b", "--c"]}, "n": null}`), &over)
+	json.Unmarshal([]byte(`{"a": 1, "o": {"x": 1, "y": [1]}, "l": [1, 2], "flatpak": {"finish_args": ["--a", "--b"]},
+		"components": {"g": {"keep": ["config.ini", "a.db"]}}}`), &base)
+	json.Unmarshal([]byte(`{"a": 2, "o": {"y": [2], "z": 3}, "l": [3], "flatpak": {"finish_args": ["--b", "--c"]}, "n": null,
+		"components": {"g": {"keep": ["mine.ini", "a.db"]}}}`), &over)
 	base["f"] = map[string]any{"url": "https://example.org/a.zip", "sha256": "x", "strip": 1}
 	over["f"] = map[string]any{"path": "a.zip", "sha256": "y"}
 	got, _ := json.Marshal(mergeJSON(base, over, ""))
-	want := `{"a":2,"f":{"path":"a.zip","sha256":"y"},"flatpak":{"finish_args":["--a","--b","--c"]},"l":[3],"n":null,"o":{"x":1,"y":[2],"z":3}}`
+	want := `{"a":2,"components":{"g":{"keep":["config.ini","a.db","mine.ini"]}},"f":{"path":"a.zip","sha256":"y"},` +
+		`"flatpak":{"finish_args":["--a","--b","--c"]},"l":[3],"n":null,"o":{"x":1,"y":[2],"z":3}}`
 	if string(got) != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}
@@ -286,5 +289,21 @@ echo "hdiutil $1" >> '` + log + `'
 	}
 	if entries, _ := os.ReadDir(filepath.Join(o.Out, "macos")); len(entries) != 3 { // app/, the zip, the dmg: no mount folder left
 		t.Errorf("left in macos/: %v", entries)
+	}
+}
+
+// TestGameVersionOnly: a component's version and its archives are one unit. Changing only the version of a game
+// definition's component would ship the definition's archives under the new number: refused. A new version with
+// the community's own archives is fine.
+func TestGameVersionOnly(t *testing.T) {
+	f, _ := usdxFixture(t)
+	own := f.bundle["components"].(map[string]any)["ultrastar-deluxe"].(map[string]any)["windows-amd64"]
+	f.bundle["components"] = map[string]any{"ultrastar-deluxe": map[string]any{"version": "2026.12.0"}}
+	if _, err := f.load(t); err == nil || !strings.Contains(err.Error(), "windows-amd64") {
+		t.Fatalf("only the version changed: %v", err)
+	}
+	f.bundle["components"] = map[string]any{"ultrastar-deluxe": map[string]any{"version": "2026.12.0", "windows-amd64": own}}
+	if _, err := f.load(t); err != nil {
+		t.Fatalf("version with own archive: %v", err)
 	}
 }
