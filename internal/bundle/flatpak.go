@@ -1,7 +1,6 @@
 package bundle
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -180,44 +179,60 @@ func (b *Bundle) desktopFile() string {
 	return buf.String()
 }
 
-func xmlText(s string) string {
-	var buf bytes.Buffer
-	xml.EscapeText(&buf, []byte(s))
-	return buf.String()
+// typedText is an XML element with a type attribute and text, like <url type="homepage">…</url>.
+type typedText struct {
+	Type string `xml:"type,attr"`
+	Text string `xml:",chardata"`
+}
+
+// metainfoXML is the AppStream file; encoding/xml escapes every value.
+type metainfoXML struct {
+	XMLName         xml.Name `xml:"component"`
+	Type            string   `xml:"type,attr"`
+	ID              string   `xml:"id"`
+	MetadataLicense string   `xml:"metadata_license"`
+	ProjectLicense  string   `xml:"project_license"`
+	Name            string   `xml:"name"`
+	Summary         string   `xml:"summary"`
+	Description     struct {
+		P []string `xml:"p"`
+	} `xml:"description"`
+	Developer struct {
+		ID   string `xml:"id,attr"`
+		Name string `xml:"name"`
+	} `xml:"developer"`
+	Launchable    typedText `xml:"launchable"`
+	URL           typedText `xml:"url"`
+	ContentRating typedText `xml:"content_rating"`
+	Releases      struct {
+		Release struct {
+			Version string `xml:"version,attr"`
+			Date    string `xml:"date,attr"`
+		} `xml:"release"`
+	} `xml:"releases"`
 }
 
 // metainfo returns the AppStream file (AppStream 1.2: type desktop-application; id, name, summary, description,
 // metadata_license and launchable are required).
 func (b *Bundle) metainfo(now time.Time) ([]byte, error) {
 	appID := b.Config.AppID
-	var desc strings.Builder
+	m := metainfoXML{Type: "desktop-application", ID: appID, MetadataLicense: "CC0-1.0", ProjectLicense: b.License,
+		Name: b.Name(), Summary: b.Summary, Launchable: typedText{"desktop-id", appID + ".desktop"},
+		URL: typedText{"homepage", b.Homepage}, ContentRating: typedText{Type: "oars-1.1"}}
 	for _, para := range strings.Split(strings.ReplaceAll(b.Description, "\r\n", "\n"), "\n\n") {
 		if para = strings.TrimSpace(para); para != "" {
-			desc.WriteString("    <p>" + xmlText(strings.Join(strings.Fields(para), " ")) + "</p>\n")
+			m.Description.P = append(m.Description.P, strings.Join(strings.Fields(para), " "))
 		}
 	}
-	devID := appID[:strings.LastIndex(appID, ".")] // the community's reverse-DNS name
-	text := `<?xml version="1.0" encoding="UTF-8"?>
-<component type="desktop-application">
-  <id>` + xmlText(appID) + `</id>
-  <metadata_license>CC0-1.0</metadata_license>
-  <project_license>` + xmlText(b.License) + `</project_license>
-  <name>` + xmlText(b.Name()) + `</name>
-  <summary>` + xmlText(b.Summary) + `</summary>
-  <description>
-` + desc.String() + `  </description>
-  <developer id="` + xmlText(devID) + `">
-    <name>` + xmlText(b.Developer) + `</name>
-  </developer>
-  <launchable type="desktop-id">` + xmlText(appID) + `.desktop</launchable>
-  <url type="homepage">` + xmlText(b.Homepage) + `</url>
-  <content_rating type="oars-1.1"/>
-  <releases>
-    <release version="` + xmlText(b.Version) + `" date="` + now.UTC().Format("2006-01-02") + `"/>
-  </releases>
-</component>
-`
-	return []byte(text), nil
+	m.Developer.ID = appID[:strings.LastIndex(appID, ".")] // the community's reverse-DNS name
+	m.Developer.Name = b.Developer
+	m.Releases.Release.Version = b.Version
+	m.Releases.Release.Date = now.UTC().Format("2006-01-02")
+	out, err := xml.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`+"\n"), append(out, '\n')...), nil
 }
 
 // Flathub's repository file: the runtimes come from there (docs.flatpak.org, single-file-bundles, repositories).

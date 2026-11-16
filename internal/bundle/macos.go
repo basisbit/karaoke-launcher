@@ -3,6 +3,7 @@ package bundle
 import (
 	"bytes"
 	"context"
+	"encoding/xml"
 	"errors"
 	"fmt"
 	"os"
@@ -194,6 +195,12 @@ func macVersion(version string) string {
 		return v
 	}
 	return "0"
+}
+
+func xmlText(s string) string {
+	var buf bytes.Buffer
+	xml.EscapeText(&buf, []byte(s))
+	return buf.String()
 }
 
 func (b *Bundle) infoPlist() []byte {
