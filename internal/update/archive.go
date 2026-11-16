@@ -189,6 +189,10 @@ func checkName(name string) error {
 	if name == "" || strings.HasPrefix(name, "/") || strings.ContainsAny(name, `\:`) {
 		return fmt.Errorf("%q is not a relative path with \"/\"", name)
 	}
+	// Reserved on Windows (learn.microsoft.com, "Naming Files, Paths, and Namespaces"); NSIS reads ? and * as wildcards.
+	if strings.ContainsAny(name, `<>"|?*`) {
+		return fmt.Errorf("%q contains a character Windows does not allow in names (< > \" | ? *)", name)
+	}
 	for _, part := range strings.Split(name, "/") {
 		switch {
 		case part == "" || part == ".." || part == ".":
