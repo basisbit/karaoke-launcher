@@ -33,6 +33,7 @@ type songs struct {
 	pause    *widget.Button
 	feeds    []*feedView
 	planSeq  int // only the newest Plan result is shown
+	loadSeq  int // only the newest list is shown
 	bottom   *fyne.Container
 	noSpace  bool // the chosen packs don't fit
 	running  bool // a download was running at the last refresh
@@ -73,11 +74,17 @@ func (a *App) showSongs() {
 	a.songs = s
 	a.setContent(s.root)
 	s.refresh(a.o.Library.Status())
-	go s.load()
+	s.reload()
+}
+
+// reload builds the list again in the background (on the Fyne goroutine).
+func (s *songs) reload() {
+	s.loadSeq++
+	go s.load(s.loadSeq)
 }
 
 // load gets the description of every feed (or the one remembered from earlier while a download runs).
-func (s *songs) load() {
+func (s *songs) load(seq int) {
 	a := s.a
 	var views []*feedView
 	for _, f := range a.o.Library.Feeds() {
@@ -85,11 +92,22 @@ func (s *songs) load() {
 		views = append(views, &feedView{feed: f, info: info, err: err})
 	}
 	a.do(func() {
-		if a.songs != s {
-			return // the screen was left
+		if a.songs != s || seq != s.loadSeq {
+			return // the screen was left, or a newer load is coming
+		}
+		pending := map[string]map[string]bool{} // ticks the user has not applied yet stay
+		for _, fv := range s.feeds {
+			for id, c := range fv.checks {
+				if c.Checked != fv.chosen[id] {
+					if pending[fv.feed.ID] == nil {
+						pending[fv.feed.ID] = map[string]bool{}
+					}
+					pending[fv.feed.ID][id] = c.Checked
+				}
+			}
 		}
 		s.feeds = views
-		s.build()
+		s.build(pending)
 		s.replan()
 	})
 }
@@ -109,8 +127,10 @@ func (a *App) inspect(id string) (*kfeed.Info, error) {
 	return nil, err
 }
 
-func (s *songs) build() {
+// build shows the feeds; pending are ticks per feed and pack that differ from what is in the library.
+func (s *songs) build(pending map[string]map[string]bool) {
 	a, tr := s.a, s.a.tr
+	running := a.o.Library.Status().Running
 	s.list.RemoveAll()
 	for _, fv := range s.feeds {
 		fv.checks, fv.chosen, fv.kinds = map[string]*widget.Check{}, map[string]bool{}, map[string]string{}
@@ -140,7 +160,14 @@ func (s *songs) build() {
 			if c.Text == "" {
 				c.Text = p.ID
 			}
-			c.SetChecked(p.Chosen || (never && slices.Contains(fv.feed.Starter, p.ID)))
+			on, changed := pending[fv.feed.ID][p.ID]
+			if !changed {
+				on = p.Chosen || (never && slices.Contains(fv.feed.Starter, p.ID))
+			}
+			c.SetChecked(on)
+			if running {
+				c.Disable() // packs are changed when no download runs (pause first)
+			}
 			id, view := p.ID, fv
 			c.OnChanged = func(on bool) { s.toggled(view, id, on) }
 			fv.checks[p.ID] = c
@@ -195,14 +222,28 @@ func (s *songs) toggled(fv *feedView, id string, on bool) {
 	if fv.kinds[id] != kfeed.KindSongs { // themes and other kinds: the texts must not speak of songs
 		title, text = tr.T("songs.remove.other.title"), tr.T("songs.remove.other", "pack", c.Text)
 	}
+	undo := func() {
+		c.OnChanged = nil
+		c.SetChecked(true)
+		c.OnChanged = func(on bool) { s.toggled(fv, id, on) }
+	}
 	d := dialog.NewConfirm(title, text, func(yes bool) {
 		if !yes {
-			c.OnChanged = nil
-			c.SetChecked(true)
-			c.OnChanged = func(on bool) { s.toggled(fv, id, on) }
+			undo()
 			return
 		}
-		s.start()
+		// only this removal: other ticks are downloaded with Download, after its free-space check
+		packs := []string{}
+		for _, p := range fv.info.Packs {
+			if fv.chosen[p.ID] && p.ID != id {
+				packs = append(packs, p.ID)
+			}
+		}
+		err := s.a.o.Library.Start(map[string]library.Choice{fv.feed.ID: {Packs: packs, Exclude: s.a.exclude()}})
+		if err != nil {
+			undo()
+			s.a.showError("error.generic", err)
+		}
 	}, s.a.win)
 	d.SetConfirmText(tr.T("songs.remove.yes"))
 	d.SetDismissText(tr.T("button.cancel"))
@@ -260,6 +301,8 @@ func (s *songs) showPlan(need, free int64, err error) {
 	tr := s.a.tr
 	if err != nil {
 		s.needs.SetText("")
+		s.noSpace = false // no estimate: Download stays possible (the download itself checks the space)
+		s.refresh(s.a.o.Library.Status())
 		return
 	}
 	s.noSpace = need > free
@@ -343,8 +386,17 @@ func (s *songs) refresh(st library.Status) {
 	} else {
 		s.pause.Disable()
 	}
+	for _, fv := range s.feeds {
+		for _, c := range fv.checks {
+			if st.Running {
+				c.Disable() // packs are changed when no download runs (pause first)
+			} else {
+				c.Enable()
+			}
+		}
+	}
 	if s.running && !st.Running {
-		go s.load() // a download ended: the packs in the library changed
+		s.reload() // a download ended: the packs in the library changed
 	}
 	s.running = st.Running
 }
