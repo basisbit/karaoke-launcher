@@ -293,6 +293,9 @@ func (c *Config) check() error {
 			}
 		}
 	}
+	if !startsWithHolder(c.Library.Default, "appdir", "userdata") {
+		return fmt.Errorf("library.default %q must start with {appdir} or {userdata}", c.Library.Default)
+	}
 	if _, err := Expand(c.Library.Default, Vars{AppDir: "a", UserData: "u"}, "appdir", "userdata"); err != nil {
 		return fmt.Errorf("library.default: %v", err)
 	}
@@ -362,13 +365,22 @@ func (c *Config) checkContent() error {
 	return nil
 }
 
+// startsWithHolder reports whether dir is one of the placeholders or a folder below one ("{appdir}/game"), not a
+// sibling ("{appdir}foo").
+func startsWithHolder(dir string, allowed ...string) bool {
+	return slices.ContainsFunc(allowed, func(a string) bool {
+		rest, ok := strings.CutPrefix(dir, "{"+a+"}")
+		return ok && (rest == "" || rest[0] == '/' || rest[0] == '\\')
+	})
+}
+
 // checkDirs checks a folder per system: it must start with one of the allowed placeholders and contain no "..".
 func checkDirs(field string, dirs map[string]string, allowed ...string) error {
 	for system, dir := range dirs {
 		if system != "windows" && system != "linux" && system != "macos" {
 			continue // a later version may know more systems
 		}
-		if !slices.ContainsFunc(allowed, func(a string) bool { return strings.HasPrefix(dir, "{"+a+"}") }) {
+		if !startsWithHolder(dir, allowed...) {
 			return fmt.Errorf("%s.dir.%s %q must start with {%s}", field, system, dir, strings.Join(allowed, "}, {"))
 		}
 		if _, err := Expand(dir, Vars{Library: "l", AppDir: "a", UserData: "u", Home: "h"}, allowed...); err != nil {
