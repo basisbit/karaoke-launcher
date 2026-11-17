@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.2.1](https://github.com/basisbit/karaoke-launcher/compare/v0.2.0...v0.2.1) (2026-11-17)
+
+
+### Bug fixes
+
+* bring the open window to the front on a second start ([1d9357a](https://github.com/basisbit/karaoke-launcher/commit/1d9357a5815f090447ebe66f45f04b528eceaf93))
+* keep the game's keep list and archives when merging definitions ([52f9059](https://github.com/basisbit/karaoke-launcher/commit/52f90593afe59c3fe91135b93ee903d3e8c9ee99))
+* never apply a stale or incomplete staged update ([1e8b103](https://github.com/basisbit/karaoke-launcher/commit/1e8b10332fb567817af284be8de4dc98e71e9ce6))
+* pause downloads for program installs ([e5dde86](https://github.com/basisbit/karaoke-launcher/commit/e5dde86abe4eb31de09ec67a0b59580cfe4f2cbd))
+* refuse archive names Windows does not allow ([05c8a36](https://github.com/basisbit/karaoke-launcher/commit/05c8a36be337d0d9ed3a618cce47d30708479ecd))
+* require folders to start with a placeholder ([b2cc224](https://github.com/basisbit/karaoke-launcher/commit/b2cc22421ab76f1b8253ace1d72b13f2b7037d7c))
+* settings apply the licence filter, keep the screen and retitle the window ([1e05489](https://github.com/basisbit/karaoke-launcher/commit/1e054897bf8acf515b3ac92e8660ec73901d698b))
+* setup keeps game settings and removes old files ([917aad1](https://github.com/basisbit/karaoke-launcher/commit/917aad122ee19f8affdbb647eabcc442cede54a1))
+* songs screen keeps ticks and removes only the confirmed pack ([7609aa2](https://github.com/basisbit/karaoke-launcher/commit/7609aa21c9dc570fa80080c02bc12f99d4a9c753))
+
+
+### Documentation
+
+* behaviour specification of the launcher window ([61d4657](https://github.com/basisbit/karaoke-launcher/commit/61d46576273e80e02004b2242256c4c06d613f89))
+* pin examples to launcher v0.2.0, formats will change ([a3ed02a](https://github.com/basisbit/karaoke-launcher/commit/a3ed02a268671f5d94272777d33d2f8ff90c6588))
+
+
+### Tests
+
+* accept CRLF in the setup script check ([4090ecb](https://github.com/basisbit/karaoke-launcher/commit/4090ecbe9cdd589a8e64796562b800c51a8f45d1))
+* wait for the songs list before cleanup ([6e986e9](https://github.com/basisbit/karaoke-launcher/commit/6e986e966c54473d70d0b7c2ff23150379f80b77))
+
 ## [0.2.0](https://github.com/basisbit/karaoke-launcher/compare/v0.1.0...v0.2.0) (2026-11-16)
 
 
