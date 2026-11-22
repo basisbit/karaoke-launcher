@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/basisbit/karaoke-feeds/tool v0.0.0-20261115120226-d49822d38264
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 )
 
 require (
